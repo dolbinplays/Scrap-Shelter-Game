@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.03.2340';
+const VERSION = 'v0.26.06.04.0007';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -346,7 +346,19 @@ function renderPieces(){
   }
 }
 function pieceNode(piece,i){
-  const rows=piece.shape.length, cols=Math.max(...piece.shape.map(r=>r.length));
+  const rawRows=piece.shape.length;
+  const rawCols=Math.max(...piece.shape.map(r=>r.length));
+  let minR=rawRows, minC=rawCols, maxR=-1, maxC=-1;
+  for(let r=0;r<rawRows;r++){
+    for(let c=0;c<rawCols;c++){
+      if(piece.shape[r] && piece.shape[r][c]){
+        minR=Math.min(minR,r); minC=Math.min(minC,c); maxR=Math.max(maxR,r); maxC=Math.max(maxC,c);
+      }
+    }
+  }
+  if(maxR<0){ minR=0; minC=0; maxR=0; maxC=0; }
+  const rows=maxR-minR+1;
+  const cols=maxC-minC+1;
   const slotLabel = i===0 ? 'Place now' : `Preview ${i}`;
   const label = `${slotLabel} #${piece.seq || ((run && run.queueStep ? run.queueStep : 1)+i)}`;
   const wrapper=document.createElement('div');
@@ -361,13 +373,17 @@ function pieceNode(piece,i){
   wrapper.appendChild(labelEl);
 
   const mini=document.createElement('div');
-  mini.className='mini-grid';
-  mini.style.gridTemplateColumns=`repeat(${cols},22px)`;
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
-    const cell=document.createElement('div');
-    const filled=piece.shape[r][c];
-    cell.className=`mini-cell ${filled?'filled '+piece.type:''}`;
-    mini.appendChild(cell);
+  mini.className='mini-grid true-shape-mini';
+  mini.style.gridTemplateColumns=`repeat(${cols}, var(--mini-size, 22px))`;
+  mini.style.gridTemplateRows=`repeat(${rows}, var(--mini-size, 22px))`;
+  mini.setAttribute('aria-label', `${RESOURCE_LABELS[piece.type]} piece shape`);
+  for(let r=minR;r<=maxR;r++){
+    for(let c=minC;c<=maxC;c++){
+      const cell=document.createElement('div');
+      const filled=!!(piece.shape[r] && piece.shape[r][c]);
+      cell.className=`mini-cell ${filled?'filled '+piece.type:'empty'}`;
+      mini.appendChild(cell);
+    }
   }
   wrapper.appendChild(mini);
 

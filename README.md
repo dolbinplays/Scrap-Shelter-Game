@@ -1,8 +1,8 @@
-# Scrap Shelter v0.26.06.03.2359 - Mobile Compact Queue + Finger Ghost
+# Scrap Shelter v0.26.06.04.0007 - Mobile True Shape + Sticky Actions
 
 Patch notes:
-- Moves the active/preview queue above the board during fullscreen puzzle play so it stays visible on phones.
-- Compacts the queue cards on mobile to preserve board space.
-- Adds a finger-offset drag ghost bubble that follows touch movement above the finger, showing whether the active piece fits.
-- Keeps the PC interaction: hover to preview, click to place.
-- Keeps mobile interaction: drag across the board, use the offset bubble, lift to place.
+- Updated visible version and save key.
+- Queue mini pieces now render as tighter true-shape previews with hidden empty cells instead of visible spacer squares.
+- Puzzle action buttons are now a sticky safe-area footer in mobile fullscreen puzzle mode.
+- Board sizing was reduced on mobile so the sticky footer remains visible above browser controls.
+- Test button remains hidden on mobile but available on wider screens.
