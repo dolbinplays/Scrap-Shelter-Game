@@ -73,9 +73,8 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .cell.ghost-blocked{outline:3px dashed var(--bad); outline-offset:-4px;}
 .cell.ghost-blocked::before{content:'×'; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--bad); background:rgba(238,107,95,.18); color:#ffd7d2; display:flex; align-items:center; justify-content:center; font-weight:1000; pointer-events:none; z-index:7;}
 .cell.anchor-cell{outline:3px solid #ffd188; outline-offset:-3px;}
-.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); z-index:10; pointer-events:none;}
+.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); animation:tileIn .14s ease both; z-index:10; pointer-events:none;}
 @keyframes tileIn{from{transform:scale(.72); opacity:.25}to{transform:scale(1); opacity:1}}
-.cell.occupied .tile{opacity:1 !important; transform:none !important; display:flex !important;}
 .tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
 .tile.clearing{animation:pop .28s ease both;}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.16); filter:brightness(1.4)}100%{transform:scale(.05); opacity:0}}
@@ -117,7 +116,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.2048 · Immediate Tile Render Fix</div>
+    <div class="version">v0.26.06.03.2118 · Queue Panel Advance Fix</div>
   </header>
 
   <nav class="nav">
@@ -157,6 +156,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
         <div class="selected-banner" id="selectedBanner"></div>
         <div class="actions"><button class="btn primary" id="placePieceBtn" onclick="commitPreviewPlacement()">Place Piece at Preview</button><button class="btn" onclick="clearPreviewAnchor()">Clear Preview</button></div>
         <div class="board" id="board"></div>
+        <div class="queue-debug" id="queueDebug">Queue initializing…</div>
         <div class="pieces" id="pieces"></div>
         <div class="footer-actions">
           <button class="btn primary" onclick="claimRun()">Claim Salvage & Return</button>
@@ -202,7 +202,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.2048';
+const VERSION = 'v0.26.06.03.2118';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -223,11 +223,17 @@ let run = null;
 let lastBoardPlaceAt = 0;
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
-  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, log:[]};
+  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, log:[]};
   selectedPiece=0; hoverAnchor=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
 function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; run.queueStep=run.queueStep||1; selectedPiece = 0; hoverAnchor=null;}
-function makePiece(){const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)]; const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)]; return {shape,type,used:false,id:Math.random().toString(36).slice(2)};}
+function makePiece(){
+  const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
+  const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)];
+  if(run && (!Number.isFinite(run.nextPieceSeq) || run.nextPieceSeq < 1)) run.nextPieceSeq = Math.max(1, (run.queueStep||1) + (run.pieces?run.pieces.length:0));
+  const seq = run ? run.nextPieceSeq++ : Math.floor(Math.random()*99999);
+  return {shape,type,used:false,id:'piece-'+seq,seq};
+}
 
 function normalizeRunQueue(){
   if(!run) return;
@@ -235,6 +241,13 @@ function normalizeRunQueue(){
   run.pieces = run.pieces.filter(p=>p && !p.used).slice(0,3);
   while(run.pieces.length<3) run.pieces.push(makePiece());
   if(!Number.isFinite(run.queueStep) || run.queueStep < 1) run.queueStep = 1;
+  if(!Number.isFinite(run.nextPieceSeq) || run.nextPieceSeq < run.queueStep + run.pieces.length){
+    run.nextPieceSeq = run.queueStep + run.pieces.length;
+  }
+  run.pieces.forEach((piece, index)=>{
+    if(!piece.seq) piece.seq = run.queueStep + index;
+    if(!piece.id) piece.id = 'piece-' + piece.seq;
+  });
   selectedPiece=0;
 }
 function showTab(tab){
@@ -394,16 +407,62 @@ function clearPreviewAnchor(){
   renderSelectedBanner();
 }
 function renderPieces(){
+  if(!run) return;
+  normalizeRunQueue();
   const p=document.getElementById('pieces');
-  p.innerHTML=run.pieces.map((piece,i)=>pieceHTML(piece,i)).join('');
+  const q=document.getElementById('queueDebug');
+  if(!p) return;
+  run.queueRenderCount = (run.queueRenderCount || 0) + 1;
+  const signature = `${run.queueStep}|${run.pieces.map(piece=>piece.id).join('|')}|render${run.queueRenderCount}`;
+  p.dataset.queueSignature = signature;
+  p.innerHTML='';
+  run.pieces.forEach((piece,i)=>p.appendChild(pieceNode(piece,i)));
+  if(q){
+    const active=run.pieces[0];
+    const previews=run.pieces.slice(1).map(piece=>`#${piece.seq || '?'} ${RESOURCE_LABELS[piece.type]}`).join(' → ');
+    q.innerHTML = `<strong>Queue step ${run.queueStep}</strong> · Place #${active ? active.seq : '?'} ${active ? RESOURCE_LABELS[active.type] : 'None'} · Next: ${previews || 'none'} · UI refresh ${run.queueRenderCount}`;
+  }
 }
-function pieceHTML(piece,i){
+function pieceNode(piece,i){
   const rows=piece.shape.length, cols=Math.max(...piece.shape.map(r=>r.length));
-  const step = (run && run.queueStep ? run.queueStep : 1) + i;
-  const label = i===0 ? `Place now #${step}` : `Preview #${step}`;
-  const shortId = piece.id ? piece.id.slice(0,4).toUpperCase() : 'NEW';
-  let cells=''; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){const filled=piece.shape[r][c]; cells += `<div class="mini-cell ${filled?'filled '+piece.type:''}"></div>`;}
-  return `<div class="piece ${i===0?'active-piece':'preview-piece'}" data-piece-id="${piece.id||''}" data-queue-slot="${i}"><span class="queue-label">${label}</span><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_ICONS[piece.type]} ${RESOURCE_LABELS[piece.type]}</strong><span class="tap-note">${i===0?'Active piece · tap board to place':`Coming after #${step-1}`}</span><span class="tap-note">ID ${shortId}</span></div>`;
+  const slotLabel = i===0 ? 'Place now' : `Preview ${i}`;
+  const label = `${slotLabel} #${piece.seq || ((run && run.queueStep ? run.queueStep : 1)+i)}`;
+  const wrapper=document.createElement('div');
+  wrapper.className=`piece ${i===0?'active-piece':'preview-piece'}`;
+  wrapper.dataset.pieceId=piece.id||'';
+  wrapper.dataset.queueSlot=String(i);
+  wrapper.dataset.pieceSeq=String(piece.seq||'');
+
+  const labelEl=document.createElement('span');
+  labelEl.className='queue-label';
+  labelEl.textContent=label;
+  wrapper.appendChild(labelEl);
+
+  const mini=document.createElement('div');
+  mini.className='mini-grid';
+  mini.style.gridTemplateColumns=`repeat(${cols},22px)`;
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const cell=document.createElement('div');
+    const filled=piece.shape[r][c];
+    cell.className=`mini-cell ${filled?'filled '+piece.type:''}`;
+    mini.appendChild(cell);
+  }
+  wrapper.appendChild(mini);
+
+  const strong=document.createElement('strong');
+  strong.textContent=`${RESOURCE_ICONS[piece.type]} ${RESOURCE_LABELS[piece.type]}`;
+  wrapper.appendChild(strong);
+
+  const note=document.createElement('span');
+  note.className='tap-note';
+  note.textContent=i===0?'Active piece · tap board to place':`Coming after #${run.pieces[i-1] ? run.pieces[i-1].seq : '?'}`;
+  wrapper.appendChild(note);
+
+  const id=document.createElement('span');
+  id.className='tap-note';
+  id.textContent=`ID ${(piece.id||'NEW').replace('piece-','#')}`;
+  wrapper.appendChild(id);
+  return wrapper;
 }
 function renderRunStats(){
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
@@ -446,20 +505,25 @@ function placeActive(r,c){
   updateBoardVisuals();
   if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');
   renderResources(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog(); saveGame(false);
-  requestAnimationFrame(()=>{ updateBoardVisuals(); verifyQueuePanelFresh(); verifyPlacedTilesRendered(); });
+  // Force the queue panel to repaint after layout as a guard against stale mobile/browser rendering.
+  requestAnimationFrame(()=>{ renderPieces(); updateBoardVisuals(); verifyQueuePanelFresh(); verifyPlacedTilesRendered(); });
 }
 function advancePieceQueue(){
   if(!run) return;
   run.pieces.shift();
-  run.pieces.push(makePiece());
   run.queueStep = (run.queueStep || 1) + 1;
+  run.pieces.push(makePiece());
+  normalizeRunQueue();
 }
 function verifyQueuePanelFresh(){
   const active = getActivePiece();
   const panel = document.querySelector('#pieces .active-piece');
-  if(active && panel && panel.dataset.pieceId !== active.id){
+  const visibleSeq = panel ? Number(panel.dataset.pieceSeq) : NaN;
+  if(active && (!panel || panel.dataset.pieceId !== active.id || visibleSeq !== Number(active.seq))){
     renderPieces();
     renderSelectedBanner();
+    const q=document.getElementById('queueDebug');
+    if(q) q.innerHTML += ' · <strong>refreshed</strong>';
   }
 }
 function verifyPlacedTilesRendered(){
