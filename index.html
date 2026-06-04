@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.1730 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.1808 - Stage 1 Prototype</title>
 <style>
 :root{
   --bg:#111418;
@@ -63,16 +63,28 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .hidden{display:none !important;}
 .board-wrap{display:flex; flex-direction:column; align-items:center; gap:12px;}
 .board{display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:min(92vw,520px); height:min(92vw,520px); max-height:calc(100vh - 260px); background:#080a0d; border:3px solid #39424b; border-radius:16px; padding:6px; gap:4px; box-shadow:inset 0 0 24px rgba(0,0,0,.7), var(--shadow); touch-action:manipulation;}
-.cell{border-radius:8px; background:linear-gradient(180deg,#171d23,#101419); border:1px solid rgba(255,255,255,.055); min-width:0; position:relative;}
+.cell{border-radius:8px; background:linear-gradient(180deg,#171d23,#101419); border:1px solid rgba(255,255,255,.09); min-width:0; position:relative;}
+.cell::after{content:''; position:absolute; inset:30%; border-radius:4px; background:rgba(255,255,255,.035); pointer-events:none;}
+.cell:focus-visible{outline:3px solid var(--accent); outline-offset:1px;}
+.cell.can-place{outline:2px solid rgba(119,209,122,.75); outline-offset:-3px;}
+.cell.cannot-place{outline:2px solid rgba(238,107,95,.7); outline-offset:-3px;}
+.cell.anchor-hint{box-shadow:inset 0 0 0 3px rgba(241,170,63,.8);}
 .cell.ghost{outline:2px dashed rgba(241,170,63,.85); outline-offset:-3px;}
 .cell.invalid{outline:2px dashed rgba(238,107,95,.85); outline-offset:-3px;}
-.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12);}
+.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); animation:tileIn .14s ease both; z-index:1;}
+@keyframes tileIn{from{transform:scale(.72); opacity:.25}to{transform:scale(1); opacity:1}}
 .tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
 .tile.clearing{animation:pop .28s ease both;}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.16); filter:brightness(1.4)}100%{transform:scale(.05); opacity:0}}
 .pieces{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%;}
 .piece{background:rgba(255,255,255,.055); border:2px solid var(--line); border-radius:18px; padding:10px; min-height:116px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;}
-.piece.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(241,170,63,.25);}
+.piece.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(241,170,63,.25), 0 0 24px rgba(241,170,63,.16);}
+.piece .tap-note{font-size:11px; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.06em;}
+.piece.selected .tap-note{color:#ffd188;}
+.play-help{width:100%; border:1px solid rgba(241,170,63,.35); background:rgba(241,170,63,.09); color:#f5d8a7; border-radius:16px; padding:10px 12px; line-height:1.35; font-size:14px;}
+.play-help strong{color:#fff0c6;}
+.selected-banner{width:100%; display:flex; justify-content:space-between; gap:8px; align-items:center; background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:14px; padding:9px 10px; color:var(--muted); font-size:13px;}
+.selected-banner b{color:var(--text);}
 .piece.used{opacity:.35; filter:grayscale(1);}
 .mini-grid{display:grid; gap:3px;}
 .mini-cell{width:22px; height:22px; border-radius:5px; background:rgba(255,255,255,.06);}
@@ -99,7 +111,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.1730</div>
+    <div class="version">v0.26.06.03.1808 · Puzzle UX Fix</div>
   </header>
 
   <nav class="nav">
@@ -135,6 +147,8 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
     <div class="grid2">
       <section class="card board-wrap">
         <h2>Salvage Puzzle</h2>
+        <div class="play-help"><strong>How to play:</strong> tap one of the three part shapes below, then tap a board square to place its top-left corner. Filled rows or columns clear into salvage. The first piece is auto-selected for you.</div>
+        <div class="selected-banner" id="selectedBanner"></div>
         <div class="board" id="board"></div>
         <div class="pieces" id="pieces"></div>
         <div class="footer-actions">
@@ -144,7 +158,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       </section>
       <aside class="card">
         <h3>Current Run</h3>
-        <p>Select a part shape, then tap a board cell to place its top-left corner. Filled rows and columns clear for resources.</p>
+        <p><strong>Tap a part below the board, then tap the board.</strong> The selected part will place using the square you tap as its top-left anchor. Filled rows and columns immediately clear into resources.</p>
         <div class="run-stats" id="runStats"></div>
         <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
         <h3 style="margin-top:16px">Puzzle Notes</h3>
@@ -180,7 +194,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.1730';
+const VERSION = 'v0.26.06.03.1808';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
 const RESOURCE_LABELS = {scrap:'Scrap', gears:'Gears', wiring:'Wiring', batteries:'Batteries'};
 const RESOURCE_ICONS = {scrap:'▣', gears:'⚙', wiring:'⌁', batteries:'▮'};
@@ -200,14 +214,14 @@ function newRun(reset){
   run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, log:[]};
   selectedPiece=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
-function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()];}
+function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; selectedPiece = 0;}
 function makePiece(){const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)]; const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)]; return {shape,type,used:false,id:Math.random().toString(36).slice(2)};}
 function showTab(tab){
   for(const id of ['base','puzzle','inventory']){document.getElementById(id+'View').classList.toggle('hidden', id!==tab); document.getElementById('tab'+cap(id)).classList.toggle('active', id===tab)}
   if(tab==='puzzle' && !run) newRun(false); renderAll();
 }
 function cap(s){return s[0].toUpperCase()+s.slice(1)}
-function renderAll(){renderResources(); renderRooms(); renderStatus(); renderLog(); if(run){renderBoard(); renderPieces(); renderRunStats(); renderPuzzleLog();} saveGame(false);}
+function renderAll(){renderResources(); renderRooms(); renderStatus(); renderLog(); if(run){ensureSelectedPiece(); renderBoard(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog();} saveGame(false);}
 function renderResources(){
   const html = RESOURCE_KEYS.map(k=>`<div class="resource"><span><span class="dot ${k}"></span> <span class="label">${RESOURCE_LABELS[k]}</span></span><span class="value">${state.resources[k]}</span></div>`).join('');
   document.getElementById('resourceBar').innerHTML=html; document.getElementById('inventoryResources').innerHTML=html;
@@ -233,9 +247,17 @@ function renderStatus(){
 function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
 function renderBoard(){
   const b=document.getElementById('board'); b.innerHTML='';
+  const piece = selectedPiece!==null ? run.pieces[selectedPiece] : null;
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
-    const cell=document.createElement('button'); cell.className='cell'; cell.onclick=()=>placeSelected(r,c); cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
-    const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);} b.appendChild(cell);
+    const cell=document.createElement('button');
+    let cls='cell';
+    if(piece && !piece.used && !run.board[r][c]) cls += canPlace(piece,r,c) ? ' can-place' : ' cannot-place';
+    if(piece && selectedPiece!==null && r===0 && c===0 && canPlace(piece,r,c)) cls += ' anchor-hint';
+    cell.className=cls;
+    cell.onclick=()=>placeSelected(r,c);
+    cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
+    const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
+    b.appendChild(cell);
   }
 }
 function renderPieces(){
@@ -245,18 +267,31 @@ function renderPieces(){
 function pieceHTML(piece,i){
   const rows=piece.shape.length, cols=Math.max(...piece.shape.map(r=>r.length));
   let cells=''; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){const filled=piece.shape[r][c]; cells += `<div class="mini-cell ${filled?'filled '+piece.type:''}"></div>`;}
-  return `<button class="piece ${selectedPiece===i?'selected':''} ${piece.used?'used':''}" onclick="selectPiece(${i})" ${piece.used?'disabled':''}><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_LABELS[piece.type]}</strong></button>`;
+  return `<button class="piece ${selectedPiece===i?'selected':''} ${piece.used?'used':''}" onclick="selectPiece(${i})" ${piece.used?'disabled':''}><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_LABELS[piece.type]}</strong><span class="tap-note">${selectedPiece===i?'Selected · tap board':'Tap to select'}</span></button>`;
 }
 function renderRunStats(){
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place part shapes to begin salvage.</div>';}
-function selectPiece(i){ if(run.pieces[i].used) return; selectedPiece=i; renderPieces(); }
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Tap the highlighted part, then tap the board to place it. Filled rows and columns become salvage.</div>';}
+function renderSelectedBanner(){
+  const el=document.getElementById('selectedBanner'); if(!el||!run) return;
+  ensureSelectedPiece();
+  if(selectedPiece===null){el.innerHTML='<span>No part selected.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
+  const piece=run.pieces[selectedPiece];
+  el.innerHTML=`<span>Selected part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>Now tap a green board square.</span>`;
+}
+function ensureSelectedPiece(){
+  if(!run || (selectedPiece!==null && run.pieces[selectedPiece] && !run.pieces[selectedPiece].used)) return;
+  const next = run.pieces.findIndex(p=>!p.used);
+  selectedPiece = next>=0 ? next : null;
+}
+function selectPiece(i){ if(run.pieces[i].used) return; selectedPiece=i; renderBoard(); renderPieces(); renderSelectedBanner(); }
 function placeSelected(r,c){
-  if(selectedPiece===null){toast('Select a part shape first.'); return;}
+  ensureSelectedPiece();
+  if(selectedPiece===null){toast('No part is available. Claim salvage or start a new puzzle.'); return;}
   const piece=run.pieces[selectedPiece]; if(!canPlace(piece,r,c)){toast('That part will not fit there.'); return;}
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]) run.board[r+pr][c+pc]=piece.type;
-  piece.used=true; run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed ${RESOURCE_LABELS[piece.type]} part.`); selectedPiece=null;
+  piece.used=true; run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed ${RESOURCE_LABELS[piece.type]} part on the board.`); selectedPiece=null;
   clearLines();
   if(run.pieces.every(p=>p.used)) dealPieces();
   if(!anyFits()) run.log.push('No pieces fit. Claim salvage or start a new run.');
