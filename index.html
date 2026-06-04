@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.1828 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.1908 - Stage 1 Prototype</title>
 <style>
 :root{
   --bg:#111418;
@@ -113,7 +113,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.1828 · Forced Queue + Ghost Preview</div>
+    <div class="version">v0.26.06.03.1908 · Pointerdown Placement Fix</div>
   </header>
 
   <nav class="nav">
@@ -156,6 +156,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
         <div class="footer-actions">
           <button class="btn primary" onclick="claimRun()">Claim Salvage & Return</button>
           <button class="btn" onclick="newRun(true)">Abandon / New Puzzle</button>
+          <button class="btn" onclick="runPlacementSelfTest()">Test Placement</button>
         </div>
       </section>
       <aside class="card">
@@ -196,7 +197,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.1828';
+const VERSION = 'v0.26.06.03.1908';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
 const RESOURCE_LABELS = {scrap:'Scrap', gears:'Gears', wiring:'Wiring', batteries:'Batteries'};
 const RESOURCE_ICONS = {scrap:'▣', gears:'⚙', wiring:'⌁', batteries:'▮'};
@@ -263,6 +264,9 @@ function renderBoard(){
   const ghostValid = piece && hoverAnchor ? canPlace(piece, hoverAnchor.r, hoverAnchor.c) : false;
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const cell=document.createElement('button');
+    cell.type='button';
+    cell.dataset.r=String(r);
+    cell.dataset.c=String(c);
     let cls='cell';
     const ghostHere = ghost && ghost.some(g=>g[0]===r && g[1]===c);
     if(ghostHere) cls += ghostValid ? ' ghost-fit' : ' ghost-blocked';
@@ -270,13 +274,21 @@ function renderBoard(){
     if(ghostHere && piece) cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
     cell.onpointerenter=()=>setHoverAnchor(r,c);
     cell.onpointermove=()=>setHoverAnchor(r,c);
-    cell.onclick=(event)=>{ event.preventDefault(); placeActive(r,c); };
+    cell.onpointerdown=(event)=>{ event.preventDefault(); event.stopPropagation(); placeActive(r,c); };
+    cell.onclick=(event)=>{ event.preventDefault(); event.stopPropagation(); };
     cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); placeActive(r,c); } };
     cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
     const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
     b.appendChild(cell);
   }
-  b.onpointerleave=()=>{hoverAnchor=null; renderBoard();};
+  b.onpointerdown=(event)=>{
+    const cell=event.target.closest('.cell');
+    if(!cell || !b.contains(cell)) return;
+    event.preventDefault();
+    placeActive(Number(cell.dataset.r), Number(cell.dataset.c));
+  };
+  b.onclick=(event)=>event.preventDefault();
+  b.onpointerleave=()=>{hoverAnchor=null; renderBoard(); renderSelectedBanner();};
 }
 function renderPieces(){
   const p=document.getElementById('pieces');
@@ -322,6 +334,21 @@ function placeActive(r,c){
   clearLines();
   if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');
   renderAll();
+}
+
+function runPlacementSelfTest(){
+  const before = run.board.flat().filter(Boolean).length;
+  const piece=getActivePiece();
+  if(!piece){toast('Self-test: no active piece.'); return;}
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    if(canPlace(piece,r,c)){
+      placeActive(r,c);
+      const after = run.board.flat().filter(Boolean).length;
+      toast(after>before ? 'Self-test placed the active piece.' : 'Self-test ran, but cleared lines may have removed tiles.');
+      return;
+    }
+  }
+  toast('Self-test: no legal placement for current piece.');
 }
 function countCells(shape){return shape.flat().filter(Boolean).length}
 function canPlace(piece,r,c){
