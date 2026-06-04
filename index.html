@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.1936 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.1958 - Stage 1 Prototype</title>
 <style>
 :root{
   --bg:#111418;
@@ -70,6 +70,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .cell.ghost-fit::before{content:''; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--ghost-color,var(--accent)); background:color-mix(in srgb, var(--ghost-color,var(--accent)) 22%, transparent); opacity:.72; pointer-events:none; z-index:2;}
 .cell.ghost-blocked{outline:3px dashed var(--bad); outline-offset:-4px;}
 .cell.ghost-blocked::before{content:'×'; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--bad); background:rgba(238,107,95,.18); color:#ffd7d2; display:flex; align-items:center; justify-content:center; font-weight:1000; pointer-events:none; z-index:3;}
+.cell.anchor-cell{outline:3px solid #ffd188; outline-offset:-3px;}
 .tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); animation:tileIn .14s ease both; z-index:1;}
 @keyframes tileIn{from{transform:scale(.72); opacity:.25}to{transform:scale(1); opacity:1}}
 .tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
@@ -113,7 +114,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.1936 · Queue Render + Tap Fix</div>
+    <div class="version">v0.26.06.03.1958 · Queue Render + Tap Fix</div>
   </header>
 
   <nav class="nav">
@@ -151,6 +152,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
         <h2>Salvage Puzzle</h2>
         <div class="play-help"><strong>How to play:</strong> place the left part first. The other two parts are previews. Move over the board to see a ghost outline; tap/click when the outline fits. Filled rows or columns clear into salvage.</div>
         <div class="selected-banner" id="selectedBanner"></div>
+        <div class="actions"><button class="btn primary" id="placePieceBtn" onclick="commitPreviewPlacement()">Place Piece at Preview</button><button class="btn" onclick="clearPreviewAnchor()">Clear Preview</button></div>
         <div class="board" id="board"></div>
         <div class="pieces" id="pieces"></div>
         <div class="footer-actions">
@@ -197,7 +199,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.1936';
+const VERSION = 'v0.26.06.03.1958';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
 const RESOURCE_LABELS = {scrap:'Scrap', gears:'Gears', wiring:'Wiring', batteries:'Batteries'};
 const RESOURCE_ICONS = {scrap:'▣', gears:'⚙', wiring:'⌁', batteries:'▮'};
@@ -261,29 +263,25 @@ function renderStatus(){
 function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
 function renderBoard(){
   const b=document.getElementById('board'); b.innerHTML='';
-  const piece = getActivePiece();
-  const ghost = piece && hoverAnchor ? ghostCells(piece, hoverAnchor.r, hoverAnchor.c) : null;
-  const ghostValid = piece && hoverAnchor ? canPlace(piece, hoverAnchor.r, hoverAnchor.c) : false;
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const cell=document.createElement('button');
     cell.type='button';
     cell.dataset.r=String(r);
     cell.dataset.c=String(c);
-    let cls='cell';
-    const ghostHere = ghost && ghost.some(g=>g[0]===r && g[1]===c);
-    if(ghostHere) cls += ghostValid ? ' ghost-fit' : ' ghost-blocked';
-    cell.className=cls;
-    if(ghostHere && piece) cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
+    cell.className='cell';
     cell.onpointerenter=()=>setHoverAnchor(r,c);
     cell.onpointermove=()=>setHoverAnchor(r,c);
-    cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); placeActive(r,c); } };
+    cell.onfocus=()=>setHoverAnchor(r,c);
+    cell.onpointerdown=(event)=>{ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); };
+    cell.onclick=(event)=>{ event.preventDefault(); if(Date.now() - lastBoardPlaceAt > 250){ setHoverAnchor(r,c); commitPreviewPlacement(); } };
+    cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); } };
     cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
-    const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
+    const type=run.board[r][c];
+    if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
     b.appendChild(cell);
   }
-  b.onpointerdown=handleBoardPointerDown;
-  b.onclick=handleBoardClick;
-  b.onpointerleave=()=>{hoverAnchor=null; renderBoard(); renderSelectedBanner();};
+  b.onpointerleave=()=>{hoverAnchor=null; applyGhostPreview(); renderSelectedBanner();};
+  applyGhostPreview();
 }
 function boardCellFromEvent(event){
   const cell = event.target.closest && event.target.closest('.cell');
@@ -295,15 +293,51 @@ function handleBoardPointerDown(event){
   const pos = boardCellFromEvent(event);
   if(!pos) return;
   event.preventDefault();
-  lastBoardPlaceAt = Date.now();
-  placeActive(pos.r,pos.c);
+  setHoverAnchor(pos.r,pos.c);
+  commitPreviewPlacement();
 }
 function handleBoardClick(event){
   const pos = boardCellFromEvent(event);
   if(!pos) return;
   event.preventDefault();
-  // Fallback for browsers/devices that do not reliably dispatch pointerdown to grid buttons.
-  if(Date.now() - lastBoardPlaceAt > 250) placeActive(pos.r,pos.c);
+  if(Date.now() - lastBoardPlaceAt > 250){ setHoverAnchor(pos.r,pos.c); commitPreviewPlacement(); }
+}
+function applyGhostPreview(){
+  const board=document.getElementById('board');
+  if(!board || !run) return;
+  const cells=[...board.querySelectorAll('.cell')];
+  cells.forEach(cell=>{
+    cell.classList.remove('ghost-fit','ghost-blocked','anchor-cell');
+    cell.style.removeProperty('--ghost-color');
+  });
+  const piece=getActivePiece();
+  if(!piece || !hoverAnchor) return;
+  const valid=canPlace(piece,hoverAnchor.r,hoverAnchor.c);
+  const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
+  ghosts.forEach(([rr,cc])=>{
+    const cell=board.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
+    if(cell){
+      cell.classList.add(valid?'ghost-fit':'ghost-blocked');
+      cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
+    }
+  });
+  const anchor=board.querySelector(`.cell[data-r="${hoverAnchor.r}"][data-c="${hoverAnchor.c}"]`);
+  if(anchor) anchor.classList.add('anchor-cell');
+  const btn=document.getElementById('placePieceBtn');
+  if(btn){
+    btn.disabled=!valid;
+    btn.textContent=valid?'Place Piece at Preview':'Preview Does Not Fit';
+  }
+}
+function commitPreviewPlacement(){
+  if(!hoverAnchor){toast('Choose a board square first.'); return;}
+  lastBoardPlaceAt=Date.now();
+  placeActive(hoverAnchor.r, hoverAnchor.c);
+}
+function clearPreviewAnchor(){
+  hoverAnchor=null;
+  applyGhostPreview();
+  renderSelectedBanner();
 }
 function renderPieces(){
   const p=document.getElementById('pieces');
@@ -331,13 +365,16 @@ function renderSelectedBanner(){
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
 function setHoverAnchor(r,c){
   hoverAnchor={r,c};
-  renderBoard();
+  applyGhostPreview();
   renderSelectedBanner();
 }
-function ghostCells(piece,r,c){
+function ghostCellsRaw(piece,r,c){
   const cells=[];
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]) cells.push([r+pr,c+pc]);
-  return cells.filter(([rr,cc])=>rr>=0&&rr<8&&cc>=0&&cc<8);
+  return cells;
+}
+function ghostCells(piece,r,c){
+  return ghostCellsRaw(piece,r,c).filter(([rr,cc])=>rr>=0&&rr<8&&cc>=0&&cc<8);
 }
 function placeActive(r,c){
   const piece=getActivePiece();
