@@ -160,7 +160,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       </section>
       <aside class="card">
         <h3>Current Run</h3>
-        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. Hover or touch the board to preview the active part footprint, then tap/click to place it. Filled rows and columns immediately clear into resources.</p>
+        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. Hover over the board to preview the active part footprint, then tap/click to place it. On phones, tap the desired anchor square to place immediately. Filled rows and columns immediately clear into resources.</p>
         <div class="run-stats" id="runStats"></div>
         <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
         <h3 style="margin-top:16px">Puzzle Notes</h3>
@@ -269,8 +269,9 @@ function renderBoard(){
     cell.className=cls;
     if(ghostHere && piece) cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
     cell.onpointerenter=()=>setHoverAnchor(r,c);
-    cell.onpointerdown=()=>setHoverAnchor(r,c);
-    cell.onclick=()=>placeActive(r,c);
+    cell.onpointermove=()=>setHoverAnchor(r,c);
+    cell.onclick=(event)=>{ event.preventDefault(); placeActive(r,c); };
+    cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); placeActive(r,c); } };
     cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
     const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
     b.appendChild(cell);
@@ -290,12 +291,12 @@ function pieceHTML(piece,i){
 function renderRunStats(){
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then tap/click to lock it in.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then tap/click to lock it in. On phones, tap the desired board square to place immediately.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — tap/click to place.' : 'Does not fit here.') : 'Move over the board to preview placement.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — tap/click to place.' : 'Does not fit here.') : 'Move over the board to preview placement, or tap a board square to place on phones.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
