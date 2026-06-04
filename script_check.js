@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.03.2246';
+const VERSION = 'v0.26.06.03.2340';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -20,12 +20,15 @@ let run = null;
 let lastBoardPlaceAt = 0;
 let suppressCompatClickUntil = 0;
 let lastTouchPreviewAt = 0;
+let mobilePreviewLocked = false;
+let touchDragActive = false;
+let activeTouchPointerId = null;
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
   run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, lastClear:null, bestClear:0, log:[]};
-  selectedPiece=0; hoverAnchor=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
+  selectedPiece=0; hoverAnchor=null; mobilePreviewLocked=false; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
-function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; run.queueStep=run.queueStep||1; selectedPiece = 0; hoverAnchor=null;}
+function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; run.queueStep=run.queueStep||1; selectedPiece = 0; hoverAnchor=null; mobilePreviewLocked=false;}
 function makePiece(){
   const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)];
   const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)];
@@ -50,6 +53,7 @@ function normalizeRunQueue(){
   selectedPiece=0;
 }
 function showTab(tab){
+  document.body.classList.toggle('puzzle-mode', tab==='puzzle');
   for(const id of ['base','puzzle','inventory']){document.getElementById(id+'View').classList.toggle('hidden', id!==tab); document.getElementById('tab'+cap(id)).classList.toggle('active', id===tab)}
   if(tab==='puzzle' && !run) newRun(false); renderAll();
 }
@@ -94,16 +98,19 @@ function ensureBoardCells(){
     cell.dataset.c=String(c);
     cell.className='cell';
     cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
-    cell.onpointerenter=()=>setHoverAnchor(r,c);
-    cell.onpointermove=()=>setHoverAnchor(r,c);
+    cell.onpointerenter=(event)=>{ if(event.pointerType==='mouse') setHoverAnchor(r,c); };
+    cell.onpointermove=(event)=>{ if(event.pointerType==='mouse' && !touchDragActive) setHoverAnchor(r,c); };
     cell.onfocus=()=>setHoverAnchor(r,c);
     cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); } };
     b.appendChild(cell);
   }
   b.dataset.ready='1';
   b.onpointerdown=handleBoardPointerDown;
+  b.onpointermove=handleBoardPointerMove;
+  b.onpointerup=handleBoardPointerUp;
+  b.onpointercancel=handleBoardPointerCancel;
   b.onclick=handleBoardClick;
-  b.onpointerleave=()=>{hoverAnchor=null; applyGhostPreview(); renderSelectedBanner();};
+  b.onpointerleave=(event)=>{ if(event.pointerType==='mouse' && !mobilePreviewLocked){ hoverAnchor=null; applyGhostPreview(); renderSelectedBanner(); } };
 }
 function updateBoardVisuals(){
   const board=document.getElementById('board');
@@ -155,25 +162,71 @@ function boardCellFromEvent(event){
   if(!cell || !board || !board.contains(cell)) return null;
   return {r:Number(cell.dataset.r), c:Number(cell.dataset.c)};
 }
+function boardCellFromPoint(x,y){
+  const board = document.getElementById('board');
+  if(!board) return null;
+  const el = document.elementFromPoint(x,y);
+  const cell = el && el.closest ? el.closest('.cell') : null;
+  if(!cell || !board.contains(cell)) return null;
+  return {r:Number(cell.dataset.r), c:Number(cell.dataset.c)};
+}
 function handleBoardPointerDown(event){
-  const pos = boardCellFromEvent(event);
+  const pos = boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY);
   if(!pos) return;
   event.preventDefault();
 
-  // Mobile/touch placement should be preview-first. A finger tap cannot hover,
-  // so tapping the board selects the anchor and shows the footprint only.
-  // The player then confirms with the Place Piece at Preview button.
   if(event.pointerType === 'touch' || event.pointerType === 'pen'){
-    suppressCompatClickUntil = Date.now() + 650;
-    lastTouchPreviewAt = Date.now();
+    suppressCompatClickUntil = Date.now() + 900;
+    touchDragActive = true;
+    activeTouchPointerId = event.pointerId;
+    mobilePreviewLocked = true;
+    const board=document.getElementById('board');
+    if(board && board.setPointerCapture){
+      try{board.setPointerCapture(event.pointerId);}catch(e){}
+    }
     setHoverAnchor(pos.r,pos.c);
-    toast(canPlace(getActivePiece(),pos.r,pos.c) ? 'Preview set. Tap Place Piece at Preview to lock it in.' : 'Preview set, but this part does not fit there.');
     return;
   }
 
-  // Mouse/trackpad keeps the faster desktop feel: click places immediately.
   setHoverAnchor(pos.r,pos.c);
   commitPreviewPlacement();
+}
+function handleBoardPointerMove(event){
+  if(event.pointerType === 'touch' || event.pointerType === 'pen'){
+    if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
+    event.preventDefault();
+    const pos = boardCellFromPoint(event.clientX,event.clientY);
+    if(pos) setHoverAnchor(pos.r,pos.c);
+    return;
+  }
+  const pos = boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY);
+  if(pos) setHoverAnchor(pos.r,pos.c);
+}
+function handleBoardPointerUp(event){
+  if(event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+  if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
+  event.preventDefault();
+  suppressCompatClickUntil = Date.now() + 900;
+  const pos = boardCellFromPoint(event.clientX,event.clientY) || hoverAnchor;
+  if(pos) setHoverAnchor(pos.r,pos.c);
+  const board=document.getElementById('board');
+  if(board && board.releasePointerCapture){
+    try{board.releasePointerCapture(event.pointerId);}catch(e){}
+  }
+  touchDragActive = false;
+  activeTouchPointerId = null;
+  mobilePreviewLocked = false;
+  if(hoverAnchor && canPlace(getActivePiece(), hoverAnchor.r, hoverAnchor.c)){
+    commitPreviewPlacement();
+  }else{
+    toast('That part will not fit there. Drag to a valid footprint and lift to place.');
+  }
+}
+function handleBoardPointerCancel(event){
+  if(event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+  touchDragActive = false;
+  activeTouchPointerId = null;
+  mobilePreviewLocked = false;
 }
 function handleBoardClick(event){
   const pos = boardCellFromEvent(event);
@@ -191,7 +244,11 @@ function applyGhostPreview(){
     cell.style.removeProperty('--ghost-color');
   });
   const piece=getActivePiece();
-  if(!piece || !hoverAnchor) return;
+  const btn=document.getElementById('placePieceBtn');
+  if(!piece || !hoverAnchor){
+    if(btn){ btn.disabled=true; btn.textContent='Choose Preview Square'; }
+    return;
+  }
   const valid=canPlace(piece,hoverAnchor.r,hoverAnchor.c);
   const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
   ghosts.forEach(([rr,cc])=>{
@@ -203,7 +260,6 @@ function applyGhostPreview(){
   });
   const anchor=board.querySelector(`.cell[data-r="${hoverAnchor.r}"][data-c="${hoverAnchor.c}"]`);
   if(anchor) anchor.classList.add('anchor-cell');
-  const btn=document.getElementById('placePieceBtn');
   if(btn){
     btn.disabled=!valid;
     btn.textContent=valid?'Place Piece at Preview':'Preview Does Not Fit';
@@ -216,6 +272,7 @@ function commitPreviewPlacement(){
 }
 function clearPreviewAnchor(){
   hoverAnchor=null;
+  mobilePreviewLocked=false;
   applyGhostPreview();
   renderSelectedBanner();
 }
@@ -278,7 +335,7 @@ function pieceNode(piece,i){
 
   const note=document.createElement('span');
   note.className='tap-note';
-  note.textContent=i===0?'Active piece · PC click places · phone tap previews first':`Coming after #${run.pieces[i-1] ? run.pieces[i-1].seq : '?'}`;
+  note.textContent=i===0?'Active piece · PC click · phone drag + lift':`Coming after #${run.pieces[i-1] ? run.pieces[i-1].seq : '?'}`;
   wrapper.appendChild(note);
 
   const id=document.createElement('span');
@@ -292,12 +349,12 @@ function renderRunStats(){
   const last=run.lastClear ? `${run.lastClear.lines} line${run.lastClear.lines>1?'s':''} · ${rewardText(run.lastClear.counts)}` : 'None yet';
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Pieces placed<b>${run.placed}</b></div><div class="stat">Line clears<b>${run.clears}</b></div><div class="stat highlight">Total salvage<b>${total}</b></div><div class="stat highlight" style="grid-column:1/-1">Last clear<b style="font-size:16px">${last}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then click to lock it in on PC. On phones, tap a board square to preview, then press Place Piece at Preview.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. PC: hover/click. Phone: drag across the board to preview, then lift your finger to place.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places immediately; phone users press Place Piece at Preview.' : 'Does not fit here.') : 'PC: move/click to place. Phone: tap a square to preview, then press Place Piece at Preview.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift finger to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag across the board to preview, then lift to place.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
@@ -327,6 +384,7 @@ function placeActive(r,c){
   advancePieceQueue();
   renderPieces(); // immediately rebuild queue cards before any later board/ghost updates
   hoverAnchor=null;
+  mobilePreviewLocked=false;
   clearLines();
   updateBoardVisuals();
   if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');

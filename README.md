@@ -1,3 +1,3 @@
-Scrap Shelter v0.26.06.03.2312 - Mobile Locked Preview Fix
+Scrap Shelter v0.26.06.03.2340 - Fullscreen Drag Drop Mobile
 
-Phone/touch placement uses a locked preview anchor. First tap previews; second tap on the same square or the Place Piece at Preview button places. Desktop hover/click placement is preserved.
+Built from v0.26.06.03.2312. Puzzle mode now opens as a focused full-screen view, locks browser scrolling while active, and uses phone drag-preview with lift-to-place while preserving PC hover/click placement.
