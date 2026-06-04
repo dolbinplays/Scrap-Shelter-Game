@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.2048 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.2220 - Stage 1B Reward Feedback</title>
 <style>
 :root{
   --bg:#111418;
@@ -97,11 +97,22 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .run-stats{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
 .stat{background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:14px; padding:10px;}
 .stat b{display:block; font-size:22px;}
+.stat.highlight{border-color:rgba(241,170,63,.6); background:rgba(241,170,63,.1);}
+.clear-pop{position:fixed; left:50%; top:45%; transform:translate(-50%,-50%); z-index:120; background:linear-gradient(180deg,#f4b75a,#d88922); color:#211407; border:2px solid #ffd188; border-radius:18px; padding:14px 18px; font-weight:1000; box-shadow:var(--shadow); animation:floatPop 1.35s ease both; pointer-events:none; text-align:center; max-width:92vw;}
+.clear-pop small{display:block; margin-top:4px; font-size:13px; font-weight:900; color:#3b250e;}
+@keyframes floatPop{0%{opacity:0; transform:translate(-50%,-40%) scale(.8)}18%{opacity:1; transform:translate(-50%,-50%) scale(1.04)}78%{opacity:1; transform:translate(-50%,-58%) scale(1)}100%{opacity:0; transform:translate(-50%,-70%) scale(.96)}}
 .log{max-height:250px; overflow:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px;}
 .log div{background:rgba(255,255,255,.045); border-left:4px solid var(--accent); border-radius:10px; padding:9px; color:var(--muted); font-size:13px;}
 .ad-slot{border:1px dashed #7a6b51; border-radius:16px; background:rgba(241,170,63,.07); color:#e4c490; padding:12px; text-align:center; font-size:13px; margin-top:10px;}
 .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(120px); background:#0c0e11; border:1px solid var(--accent); color:var(--text); padding:12px 16px; border-radius:16px; box-shadow:var(--shadow); transition:.25s ease; z-index:99; max-width:92vw;}
 .toast.show{transform:translateX(-50%) translateY(0);}
+.modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.72); display:flex; align-items:center; justify-content:center; padding:18px; z-index:110;}
+.modal{width:min(560px,96vw); background:linear-gradient(180deg,var(--panel),#151a20); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:18px;}
+.modal h2{margin:0 0 8px;}
+.summary-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0;}
+.summary-item{background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:14px; padding:10px;}
+.summary-item strong{display:block; font-size:24px;}
+.summary-total{border-color:rgba(241,170,63,.7); background:rgba(241,170,63,.1);}
 .footer-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
 .kv{display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.08); color:var(--muted);}
 .kv strong{color:var(--text)}
@@ -116,7 +127,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.2144 · Queue Hard Refresh Fix</div>
+    <div class="version">v0.26.06.03.2220 · Stage 1B Reward Feedback</div>
   </header>
 
   <nav class="nav">
@@ -130,7 +141,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
     <div class="grid2">
       <section class="card">
         <h2>Base Systems</h2>
-        <p>Rooms wear down after puzzle runs and test time advances. Repair them with parts recovered from the block-placement puzzle. The puzzle now uses a forced queue: place the left part first, while the next two parts preview what is coming.</p>
+        <p>Rooms wear down after puzzle runs and test time advances. Repair them with parts recovered from the block-placement puzzle. The puzzle now uses a forced queue: place the left part first, while the next two parts preview what is coming. Stage 1B adds clearer line-clear feedback and a salvage summary before returning to base.</p>
         <div class="rooms" id="rooms"></div>
         <div class="footer-actions">
           <button class="btn primary" onclick="showTab('puzzle')">Play Salvage Puzzle</button>
@@ -159,14 +170,14 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
         <div class="queue-debug" id="queueDebug">Queue initializing…</div>
         <div class="pieces" id="pieces"></div>
         <div class="footer-actions">
-          <button class="btn primary" onclick="claimRun()">Claim Salvage & Return</button>
+          <button class="btn primary" onclick="showRunSummary()">Claim Salvage & Return</button>
           <button class="btn" onclick="newRun(true)">Abandon / New Puzzle</button>
           <button class="btn" onclick="runPlacementSelfTest()">Test Place + Render</button>
         </div>
       </section>
       <aside class="card">
         <h3>Current Run</h3>
-        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. Hover over the board to preview the active part footprint, then tap/click to place it. On phones, tap the desired anchor square to place immediately. Filled rows and columns immediately clear into resources.</p>
+        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. Hover over the board to preview the active part footprint, then tap/click to place it. On phones, tap the desired anchor square to place immediately. Filled rows and columns now pop a clear message, update the run payout, and appear in the end-of-run summary.</p>
         <div class="run-stats" id="runStats"></div>
         <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
         <h3 style="margin-top:16px">Puzzle Notes</h3>
@@ -201,8 +212,20 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
   </main>
 </div>
 <div class="toast" id="toast"></div>
+<div class="modal-backdrop hidden" id="runSummaryModal">
+  <div class="modal">
+    <h2>Salvage Run Summary</h2>
+    <p id="summaryLead">Review your recovered parts before returning to base.</p>
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="ad-slot">Future rewarded ad: double this salvage payout. Disabled in prototype.</div>
+    <div class="footer-actions">
+      <button class="btn primary" onclick="confirmClaimRun()">Claim Salvage & Return</button>
+      <button class="btn" onclick="closeRunSummary()">Keep Playing</button>
+    </div>
+  </div>
+</div>
 <script>
-const VERSION = 'v0.26.06.03.2144';
+const VERSION = 'v0.26.06.03.2220';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -223,7 +246,7 @@ let run = null;
 let lastBoardPlaceAt = 0;
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
-  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, log:[]};
+  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, lastClear:null, bestClear:0, log:[]};
   selectedPiece=0; hoverAnchor=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
 function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; run.queueStep=run.queueStep||1; selectedPiece = 0; hoverAnchor=null;}
@@ -475,7 +498,9 @@ function pieceNode(piece,i){
   return wrapper;
 }
 function renderRunStats(){
-  document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
+  const total=RESOURCE_KEYS.reduce((sum,k)=>sum+(run.rewards[k]||0),0);
+  const last=run.lastClear ? `${run.lastClear.lines} line${run.lastClear.lines>1?'s':''} · ${rewardText(run.lastClear.counts)}` : 'None yet';
+  document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Pieces placed<b>${run.placed}</b></div><div class="stat">Line clears<b>${run.clears}</b></div><div class="stat highlight">Total salvage<b>${total}</b></div><div class="stat highlight" style="grid-column:1/-1">Last clear<b style="font-size:16px">${last}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
 function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then tap/click to lock it in. On phones, tap the desired board square to place immediately.</div>';}
 function renderSelectedBanner(){
@@ -585,13 +610,46 @@ function clearLines(){
   const counts={scrap:0,gears:0,wiring:0,batteries:0};
   cleared.forEach(([r,c])=>{const t=run.board[r][c]; if(t) counts[t]++; run.board[r][c]=null;});
   RESOURCE_KEYS.forEach(k=>{run.rewards[k]+=counts[k];});
-  const lineCount=rows.length+cols.length; run.clears += lineCount; run.score += cleared.length*10 + Math.max(0,lineCount-1)*25;
-  run.log.push(`Cleared ${lineCount} line${lineCount>1?'s':''} and recovered ${rewardText(counts)}.`);
+  const lineCount=rows.length+cols.length;
+  const multiBonus=Math.max(0,lineCount-1)*25;
+  run.clears += lineCount;
+  run.bestClear=Math.max(run.bestClear||0,lineCount);
+  run.score += cleared.length*10 + multiBonus;
+  run.lastClear={lines:lineCount, cells:cleared.length, counts, score:cleared.length*10+multiBonus};
+  const message=`Cleared ${lineCount} line${lineCount>1?'s':''} and recovered ${rewardText(counts)}${multiBonus?` · multi-line bonus +${multiBonus}`:''}.`;
+  run.log.push(message);
+  showClearPop(lineCount, counts, multiBonus);
 }
+function showClearPop(lineCount, counts, bonus){
+  const old=document.querySelector('.clear-pop');
+  if(old) old.remove();
+  const el=document.createElement('div');
+  el.className='clear-pop';
+  el.innerHTML=`${lineCount} LINE${lineCount>1?'S':''} CLEARED<small>${rewardText(counts)}${bonus?` · +${bonus} score bonus`:''}</small>`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1400);
+}
+function showRunSummary(){
+  if(!run) return;
+  const total=RESOURCE_KEYS.reduce((sum,k)=>sum+(run.rewards[k]||0),0);
+  document.getElementById('summaryLead').textContent = total>0 ? 'Recovered salvage is ready to move into base inventory.' : 'No salvage recovered yet. You can keep playing or return with nothing.';
+  const rows=[
+    ['Score', run.score],
+    ['Pieces placed', run.placed],
+    ['Line clears', run.clears],
+    ['Best clear', `${run.bestClear||0} line${(run.bestClear||0)===1?'':'s'}`],
+    ...RESOURCE_KEYS.map(k=>[RESOURCE_LABELS[k], run.rewards[k]||0]),
+    ['Total salvage', total]
+  ];
+  document.getElementById('summaryGrid').innerHTML = rows.map(([label,value])=>`<div class="summary-item ${label==='Total salvage'?'summary-total':''}">${label}<strong>${value}</strong></div>`).join('');
+  document.getElementById('runSummaryModal').classList.remove('hidden');
+}
+function closeRunSummary(){document.getElementById('runSummaryModal').classList.add('hidden');}
+function confirmClaimRun(){closeRunSummary(); claimRun();}
 function claimRun(){
   if(!run) return;
   RESOURCE_KEYS.forEach(k=>state.resources[k]+=run.rewards[k]);
-  const summary = `Salvage claimed: ${rewardText(run.rewards)}. Base advanced by 12 hours.`;
+  const summary = `Salvage claimed: ${rewardText(run.rewards)} · score ${run.score}. Base advanced by 12 hours.`;
   state.log.push(summary); run=null; advanceTime(12, null, false); showTab('base'); toast(summary);
 }
 function advanceTime(hours, note, doRender=true){
