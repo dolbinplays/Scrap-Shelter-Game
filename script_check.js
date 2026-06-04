@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.04.0118';
+const VERSION = 'v0.26.06.04.0156';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -23,6 +23,7 @@ let lastTouchPreviewAt = 0;
 let mobilePreviewLocked = false;
 let touchDragActive = false;
 let activeTouchPointerId = null;
+const MOBILE_TARGET_Y_OFFSET = 86; // finger sits below the intended board footprint on touch screens
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
   run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, lastClear:null, bestClear:0, log:[]};
@@ -193,9 +194,13 @@ function hideDragGhost(){
   ghost.style.transform='translate(-9999px,-9999px)';
 }
 function updateTouchDragGhost(event, pos){
-  const piece=getActivePiece();
-  if(!piece || !pos){ hideDragGhost(); return; }
-  renderDragGhost(piece, canPlace(piece,pos.r,pos.c), event.clientX, event.clientY);
+  // Touch controls now preview directly on the board using an offset target.
+  // The player's finger can sit below the intended landing point while the true
+  // footprint is highlighted on the board itself.
+  hideDragGhost();
+}
+function boardCellFromOffsetTouchPoint(x,y){
+  return boardCellFromPoint(x, y - MOBILE_TARGET_Y_OFFSET);
 }
 
 function boardCellFromEvent(event){
@@ -213,11 +218,12 @@ function boardCellFromPoint(x,y){
   return {r:Number(cell.dataset.r), c:Number(cell.dataset.c)};
 }
 function handleBoardPointerDown(event){
-  const pos = boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY);
+  const isTouchLike = event.pointerType === 'touch' || event.pointerType === 'pen';
+  const pos = isTouchLike ? boardCellFromOffsetTouchPoint(event.clientX,event.clientY) : (boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY));
   if(!pos) return;
   event.preventDefault();
 
-  if(event.pointerType === 'touch' || event.pointerType === 'pen'){
+  if(isTouchLike){
     suppressCompatClickUntil = Date.now() + 900;
     touchDragActive = true;
     activeTouchPointerId = event.pointerId;
@@ -238,7 +244,7 @@ function handleBoardPointerMove(event){
   if(event.pointerType === 'touch' || event.pointerType === 'pen'){
     if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
     event.preventDefault();
-    const pos = boardCellFromPoint(event.clientX,event.clientY);
+    const pos = boardCellFromOffsetTouchPoint(event.clientX,event.clientY);
     if(pos){ setHoverAnchor(pos.r,pos.c); updateTouchDragGhost(event, pos); }
     return;
   }
@@ -250,7 +256,7 @@ function handleBoardPointerUp(event){
   if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
   event.preventDefault();
   suppressCompatClickUntil = Date.now() + 900;
-  const pos = boardCellFromPoint(event.clientX,event.clientY) || hoverAnchor;
+  const pos = boardCellFromOffsetTouchPoint(event.clientX,event.clientY) || hoverAnchor;
   if(pos) setHoverAnchor(pos.r,pos.c);
   const board=document.getElementById('board');
   if(board && board.releasePointerCapture){
@@ -295,17 +301,14 @@ function applyGhostPreview(){
     return;
   }
   const valid=canPlace(piece,hoverAnchor.r,hoverAnchor.c);
-  const isTouchPreview = touchDragActive || mobilePreviewLocked || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-  if(!isTouchPreview){
-    const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
-    ghosts.forEach(([rr,cc])=>{
-      const cell=board.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
-      if(cell){
-        cell.classList.add(valid?'ghost-fit':'ghost-blocked');
-        cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
-      }
-    });
-  }
+  const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
+  ghosts.forEach(([rr,cc])=>{
+    const cell=board.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
+    if(cell){
+      cell.classList.add(valid?'ghost-fit':'ghost-blocked');
+      cell.style.setProperty('--ghost-color', valid ? `var(--${piece.type})` : 'var(--bad)');
+    }
+  });
   const anchor=board.querySelector(`.cell[data-r="${hoverAnchor.r}"][data-c="${hoverAnchor.c}"]`);
   if(anchor){
     anchor.classList.add('anchor-cell');
@@ -417,12 +420,12 @@ function renderRunStats(){
   const last=run.lastClear ? `${run.lastClear.lines} line${run.lastClear.lines>1?'s':''} · ${rewardText(run.lastClear.counts)}` : 'None yet';
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Pieces placed<b>${run.placed}</b></div><div class="stat">Line clears<b>${run.clears}</b></div><div class="stat highlight">Total salvage<b>${total}</b></div><div class="stat highlight" style="grid-column:1/-1">Last clear<b style="font-size:16px">${last}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. PC: hover/click. Phone: drag across the board and lift to place.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. PC: hover/click. Phone: drag below the target; the highlighted board footprint is where the part will land when you lift.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag; floating outline previews, lift to place.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — lift/click to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag below the target; board footprint previews above your finger, lift to place.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
