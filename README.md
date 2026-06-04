@@ -1,3 +1,7 @@
+# Scrap Shelter v0.26.06.03.2026 — Render Persistence + Save Fix
+
+This patch fixes stale-save migration and placed tile rendering. It uses a versioned localStorage key so older broken puzzle state will not silently carry into this build. Placed cells now receive explicit occupied classes and a render guard checks that board data is represented visually after placement.
+
 # Scrap Shelter v0.26.06.03.1936 — Queue Render + Tap Fix
 
 Patch notes:
