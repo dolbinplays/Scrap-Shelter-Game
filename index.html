@@ -116,7 +116,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.2118 · Queue Panel Advance Fix</div>
+    <div class="version">v0.26.06.03.2144 · Queue Hard Refresh Fix</div>
   </header>
 
   <nav class="nav">
@@ -202,7 +202,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.2118';
+const VERSION = 'v0.26.06.03.2144';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -409,14 +409,24 @@ function clearPreviewAnchor(){
 function renderPieces(){
   if(!run) return;
   normalizeRunQueue();
-  const p=document.getElementById('pieces');
+  const oldPanel=document.getElementById('pieces');
   const q=document.getElementById('queueDebug');
-  if(!p) return;
+  if(!oldPanel) return;
   run.queueRenderCount = (run.queueRenderCount || 0) + 1;
   const signature = `${run.queueStep}|${run.pieces.map(piece=>piece.id).join('|')}|render${run.queueRenderCount}`;
-  p.dataset.queueSignature = signature;
-  p.innerHTML='';
-  run.pieces.forEach((piece,i)=>p.appendChild(pieceNode(piece,i)));
+
+  // Hard refresh the queue panel instead of only changing innerHTML. Some browser/mobile
+  // combinations were visually keeping the original three piece cards even after the
+  // queue state advanced, while the selected-banner state updated correctly.
+  const freshPanel=document.createElement('div');
+  freshPanel.className='pieces';
+  freshPanel.id='pieces';
+  freshPanel.dataset.queueSignature = signature;
+  freshPanel.dataset.activePieceId = run.pieces[0] ? run.pieces[0].id : '';
+  freshPanel.dataset.queueStep = String(run.queueStep || 1);
+  run.pieces.forEach((piece,i)=>freshPanel.appendChild(pieceNode(piece,i)));
+  oldPanel.replaceWith(freshPanel);
+
   if(q){
     const active=run.pieces[0];
     const previews=run.pieces.slice(1).map(piece=>`#${piece.seq || '?'} ${RESOURCE_LABELS[piece.type]}`).join(' → ');
@@ -500,6 +510,7 @@ function placeActive(r,c){
   paintPlacedCellsNow(placedCells);
   run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed #${run.queueStep||1}: ${RESOURCE_LABELS[piece.type]} part from the front of the queue.`);
   advancePieceQueue();
+  renderPieces(); // immediately rebuild queue cards before any later board/ghost updates
   hoverAnchor=null;
   clearLines();
   updateBoardVisuals();
@@ -519,11 +530,12 @@ function verifyQueuePanelFresh(){
   const active = getActivePiece();
   const panel = document.querySelector('#pieces .active-piece');
   const visibleSeq = panel ? Number(panel.dataset.pieceSeq) : NaN;
-  if(active && (!panel || panel.dataset.pieceId !== active.id || visibleSeq !== Number(active.seq))){
+  const visibleId = panel ? panel.dataset.pieceId : '';
+  if(active && (!panel || visibleId !== active.id || visibleSeq !== Number(active.seq))){
     renderPieces();
     renderSelectedBanner();
     const q=document.getElementById('queueDebug');
-    if(q) q.innerHTML += ' · <strong>refreshed</strong>';
+    if(q) q.innerHTML += ' · <strong>hard refreshed</strong>';
   }
 }
 function verifyPlacedTilesRendered(){
