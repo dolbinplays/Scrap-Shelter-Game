@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Scrap Shelter v0.26.06.03.1730 - Stage 1 Prototype</title>
+<style>
+:root{
+  --bg:#111418;
+  --panel:#1c2229;
+  --panel2:#252d35;
+  --line:#38424d;
+  --text:#f2efe5;
+  --muted:#b7b0a0;
+  --accent:#f1aa3f;
+  --good:#77d17a;
+  --warn:#f0c94f;
+  --bad:#ee6b5f;
+  --blue:#65b9ff;
+  --scrap:#9aa0a6;
+  --gears:#d5b45f;
+  --wiring:#59c2ff;
+  --batteries:#7de37b;
+  --empty:#0b0d10;
+  --shadow:0 16px 40px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+html,body{margin:0; min-height:100%; background:radial-gradient(circle at 20% 0%, #2b2117 0, transparent 35%), linear-gradient(180deg,#13171c,#0b0c0e); color:var(--text); font-family:Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;}
+body{overflow-x:hidden;}
+button{font:inherit; color:inherit; cursor:pointer; border:0;}
+.app{max-width:1180px; margin:0 auto; padding:16px;}
+.header{display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px;}
+.brand{display:flex; flex-direction:column; gap:2px;}
+.brand h1{font-size:clamp(24px,4vw,44px); margin:0; line-height:1; letter-spacing:.5px;}
+.brand small{color:var(--muted); font-weight:700; letter-spacing:.08em; text-transform:uppercase;}
+.version{font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:6px 10px; background:rgba(255,255,255,.04); white-space:nowrap;}
+.nav{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; position:sticky; top:0; z-index:10; padding:8px 0; background:linear-gradient(180deg,rgba(17,20,24,.98),rgba(17,20,24,.86)); backdrop-filter: blur(8px);}
+.nav button,.btn{border-radius:14px; background:var(--panel2); border:1px solid var(--line); padding:12px 10px; font-weight:800; box-shadow:0 4px 0 rgba(0,0,0,.25);}
+.nav button.active,.btn.primary{background:linear-gradient(180deg,#f4b75a,#d88922); color:#211407; border-color:#ffd188;}
+.btn.good{background:#22442b; border-color:#4f9b5f; color:#d7ffd9;}
+.btn.danger{background:#43201e; border-color:#9b4d47; color:#ffd9d4;}
+.btn.small{padding:8px 10px; border-radius:10px; font-size:13px;}
+.grid2{display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:12px;}
+.card{background:linear-gradient(180deg,var(--panel),#151a20); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:14px;}
+.card h2,.card h3{margin:0 0 10px;}
+.card p{color:var(--muted); line-height:1.45;}
+.resources{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px;}
+.resource{background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:16px; padding:10px; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:56px;}
+.resource .label{font-size:12px; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.06em;}
+.resource .value{font-size:24px; font-weight:900;}
+.dot{width:18px; height:18px; border-radius:5px; display:inline-block; box-shadow: inset 0 0 0 2px rgba(0,0,0,.2);}
+.dot.scrap{background:var(--scrap)} .dot.gears{background:var(--gears)} .dot.wiring{background:var(--wiring)} .dot.batteries{background:var(--batteries)}
+.rooms{display:grid; gap:10px;}
+.room{background:rgba(255,255,255,.045); border:1px solid var(--line); border-radius:18px; padding:12px;}
+.room-head{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+.room-title{font-weight:900; font-size:18px;}
+.room-status{font-size:12px; color:var(--muted); font-weight:800; text-transform:uppercase;}
+.bar{height:14px; border-radius:999px; background:#07090b; overflow:hidden; border:1px solid rgba(255,255,255,.1); margin:10px 0;}
+.fill{height:100%; width:50%; background:var(--good); transition:width .25s ease;}
+.fill.warn{background:var(--warn)} .fill.bad{background:var(--bad)}
+.room-actions{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+.cost{color:var(--muted); font-size:13px; flex:1 1 180px;}
+.hidden{display:none !important;}
+.board-wrap{display:flex; flex-direction:column; align-items:center; gap:12px;}
+.board{display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:min(92vw,520px); height:min(92vw,520px); max-height:calc(100vh - 260px); background:#080a0d; border:3px solid #39424b; border-radius:16px; padding:6px; gap:4px; box-shadow:inset 0 0 24px rgba(0,0,0,.7), var(--shadow); touch-action:manipulation;}
+.cell{border-radius:8px; background:linear-gradient(180deg,#171d23,#101419); border:1px solid rgba(255,255,255,.055); min-width:0; position:relative;}
+.cell.ghost{outline:2px dashed rgba(241,170,63,.85); outline-offset:-3px;}
+.cell.invalid{outline:2px dashed rgba(238,107,95,.85); outline-offset:-3px;}
+.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12);}
+.tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
+.tile.clearing{animation:pop .28s ease both;}
+@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.16); filter:brightness(1.4)}100%{transform:scale(.05); opacity:0}}
+.pieces{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%;}
+.piece{background:rgba(255,255,255,.055); border:2px solid var(--line); border-radius:18px; padding:10px; min-height:116px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;}
+.piece.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(241,170,63,.25);}
+.piece.used{opacity:.35; filter:grayscale(1);}
+.mini-grid{display:grid; gap:3px;}
+.mini-cell{width:22px; height:22px; border-radius:5px; background:rgba(255,255,255,.06);}
+.mini-cell.filled.scrap{background:var(--scrap)} .mini-cell.filled.gears{background:var(--gears)} .mini-cell.filled.wiring{background:var(--wiring)} .mini-cell.filled.batteries{background:var(--batteries)}
+.run-stats{display:grid; grid-template-columns:repeat(2,1fr); gap:8px;}
+.stat{background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:14px; padding:10px;}
+.stat b{display:block; font-size:22px;}
+.log{max-height:250px; overflow:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px;}
+.log div{background:rgba(255,255,255,.045); border-left:4px solid var(--accent); border-radius:10px; padding:9px; color:var(--muted); font-size:13px;}
+.ad-slot{border:1px dashed #7a6b51; border-radius:16px; background:rgba(241,170,63,.07); color:#e4c490; padding:12px; text-align:center; font-size:13px; margin-top:10px;}
+.toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(120px); background:#0c0e11; border:1px solid var(--accent); color:var(--text); padding:12px 16px; border-radius:16px; box-shadow:var(--shadow); transition:.25s ease; z-index:99; max-width:92vw;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.footer-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+.kv{display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.08); color:var(--muted);}
+.kv strong{color:var(--text)}
+@media(max-width:850px){.grid2{grid-template-columns:1fr}.resources{grid-template-columns:repeat(2,1fr)}.header{align-items:flex-start}.version{white-space:normal}.board{max-height:none}.pieces{grid-template-columns:1fr}.piece{min-height:96px}.run-stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="brand">
+      <small>Stage 1 Prototype</small>
+      <h1>Scrap Shelter</h1>
+      <small>Build from the broken world</small>
+    </div>
+    <div class="version">v0.26.06.03.1730</div>
+  </header>
+
+  <nav class="nav">
+    <button id="tabBase" class="active" onclick="showTab('base')">Base</button>
+    <button id="tabPuzzle" onclick="showTab('puzzle')">Puzzle</button>
+    <button id="tabInventory" onclick="showTab('inventory')">Inventory</button>
+  </nav>
+
+  <main id="baseView">
+    <div class="resources" id="resourceBar"></div>
+    <div class="grid2">
+      <section class="card">
+        <h2>Base Systems</h2>
+        <p>Rooms wear down after puzzle runs and test time advances. Repair them with parts recovered from the block-placement puzzle.</p>
+        <div class="rooms" id="rooms"></div>
+        <div class="footer-actions">
+          <button class="btn primary" onclick="showTab('puzzle')">Play Salvage Puzzle</button>
+          <button class="btn" onclick="advanceTime(1, 'Manual test tick advanced the base by 1 hour.')">Advance 1 Hour</button>
+          <button class="btn" onclick="advanceTime(12, 'Manual test tick advanced the base by half a day.')">Advance 12 Hours</button>
+        </div>
+      </section>
+      <aside class="card">
+        <h3>Shelter Status</h3>
+        <div id="shelterStatus"></div>
+        <div class="ad-slot">Future banner placement: Base screen only, removable with supporter pack. Disabled in prototype.</div>
+        <h3 style="margin-top:16px">Event Log</h3>
+        <div class="log" id="log"></div>
+      </aside>
+    </div>
+  </main>
+
+  <main id="puzzleView" class="hidden">
+    <div class="grid2">
+      <section class="card board-wrap">
+        <h2>Salvage Puzzle</h2>
+        <div class="board" id="board"></div>
+        <div class="pieces" id="pieces"></div>
+        <div class="footer-actions">
+          <button class="btn primary" onclick="claimRun()">Claim Salvage & Return</button>
+          <button class="btn" onclick="newRun(true)">Abandon / New Puzzle</button>
+        </div>
+      </section>
+      <aside class="card">
+        <h3>Current Run</h3>
+        <p>Select a part shape, then tap a board cell to place its top-left corner. Filled rows and columns clear for resources.</p>
+        <div class="run-stats" id="runStats"></div>
+        <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
+        <h3 style="margin-top:16px">Puzzle Notes</h3>
+        <div class="log" id="puzzleLog"></div>
+      </aside>
+    </div>
+  </main>
+
+  <main id="inventoryView" class="hidden">
+    <div class="grid2">
+      <section class="card">
+        <h2>Inventory</h2>
+        <p>These resources come directly from puzzle clears and are spent on base repairs and later upgrades.</p>
+        <div class="resources" id="inventoryResources"></div>
+        <h3>Prototype Save Tools</h3>
+        <div class="footer-actions">
+          <button class="btn" onclick="saveGame(true)">Save</button>
+          <button class="btn" onclick="loadGame(true)">Load</button>
+          <button class="btn danger" onclick="resetGame()">Reset Prototype</button>
+        </div>
+      </section>
+      <aside class="card">
+        <h3>Roadmap Rolled In</h3>
+        <div class="kv"><span>Rewarded ads</span><strong>Planned</strong></div>
+        <div class="kv"><span>Banner placement</span><strong>Base only</strong></div>
+        <div class="kv"><span>Forced ads</span><strong>Avoid</strong></div>
+        <div class="kv"><span>Polish priority</span><strong>UI + feedback</strong></div>
+        <div class="kv"><span>ROI strategy</span><strong>Lean MVP</strong></div>
+        <p>The prototype includes ad slots as layout placeholders only. Real monetization should come after the core loop proves fun.</p>
+      </aside>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const VERSION = 'v0.26.06.03.1730';
+const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
+const RESOURCE_LABELS = {scrap:'Scrap', gears:'Gears', wiring:'Wiring', batteries:'Batteries'};
+const RESOURCE_ICONS = {scrap:'▣', gears:'⚙', wiring:'⌁', batteries:'▮'};
+const ROOM_DATA = {
+  workshop:{name:'Workshop', desc:'Central repair bench. Better condition keeps repairs reliable.', repair:{scrap:5,gears:2}, wear:0.7},
+  generator:{name:'Generator', desc:'Powers the shelter. Low condition slows the whole base.', repair:{scrap:6,gears:2,wiring:1,batteries:1}, wear:0.95},
+  water:{name:'Water Filter', desc:'Keeps the shelter stable. Low condition hurts morale and recovery.', repair:{scrap:4,wiring:2,batteries:1}, wear:0.8}
+};
+const SHAPES = [
+  [[1]], [[1,1]], [[1],[1]], [[1,1,1]], [[1],[1],[1]], [[1,1],[1,0]], [[1,1],[0,1]], [[1,0],[1,1]], [[0,1],[1,1]], [[1,1],[1,1]], [[1,1,1],[0,1,0]], [[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]]
+];
+let state;
+let selectedPiece = null;
+let run = null;
+function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
+function newRun(reset){
+  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, log:[]};
+  selectedPiece=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
+}
+function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()];}
+function makePiece(){const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)]; const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)]; return {shape,type,used:false,id:Math.random().toString(36).slice(2)};}
+function showTab(tab){
+  for(const id of ['base','puzzle','inventory']){document.getElementById(id+'View').classList.toggle('hidden', id!==tab); document.getElementById('tab'+cap(id)).classList.toggle('active', id===tab)}
+  if(tab==='puzzle' && !run) newRun(false); renderAll();
+}
+function cap(s){return s[0].toUpperCase()+s.slice(1)}
+function renderAll(){renderResources(); renderRooms(); renderStatus(); renderLog(); if(run){renderBoard(); renderPieces(); renderRunStats(); renderPuzzleLog();} saveGame(false);}
+function renderResources(){
+  const html = RESOURCE_KEYS.map(k=>`<div class="resource"><span><span class="dot ${k}"></span> <span class="label">${RESOURCE_LABELS[k]}</span></span><span class="value">${state.resources[k]}</span></div>`).join('');
+  document.getElementById('resourceBar').innerHTML=html; document.getElementById('inventoryResources').innerHTML=html;
+}
+function conditionClass(c){return c<30?'bad':c<60?'warn':''}
+function conditionLabel(c){return c<=0?'Offline':c<20?'Critical':c<40?'Damaged':c<70?'Worn':'Stable'}
+function renderRooms(){
+  document.getElementById('rooms').innerHTML = Object.keys(ROOM_DATA).map(id=>{
+    const meta=ROOM_DATA[id], room=state.rooms[id], c=Math.round(room.condition), cost=costText(meta.repair), afford=canAfford(meta.repair);
+    return `<div class="room"><div class="room-head"><div><div class="room-title">${meta.name} <span class="room-status">Lv ${room.level}</span></div><div class="room-status">${conditionLabel(c)} - ${c}%</div></div><button class="btn small ${afford?'good':''}" onclick="repairRoom('${id}')">Repair</button></div><div class="bar"><div class="fill ${conditionClass(c)}" style="width:${Math.max(0,c)}%"></div></div><p>${meta.desc}</p><div class="room-actions"><span class="cost">Repair cost: ${cost}</span><button class="btn small" onclick="upgradeRoom('${id}')">Upgrade</button></div></div>`
+  }).join('');
+}
+function renderStatus(){
+  const avg = Math.round(Object.values(state.rooms).reduce((a,r)=>a+r.condition,0)/Object.keys(state.rooms).length);
+  const gen=state.rooms.generator.condition;
+  document.getElementById('shelterStatus').innerHTML = `
+    <div class="kv"><span>In-game time</span><strong>Day ${state.day}, ${String(state.hour).padStart(2,'0')}:00</strong></div>
+    <div class="kv"><span>Average condition</span><strong>${avg}%</strong></div>
+    <div class="kv"><span>Power state</span><strong>${gen<=0?'Offline':gen<40?'Unstable':'Online'}</strong></div>
+    <div class="kv"><span>Prototype goal</span><strong>Survive 7 days</strong></div>
+  `;
+}
+function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
+function renderBoard(){
+  const b=document.getElementById('board'); b.innerHTML='';
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const cell=document.createElement('button'); cell.className='cell'; cell.onclick=()=>placeSelected(r,c); cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
+    const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);} b.appendChild(cell);
+  }
+}
+function renderPieces(){
+  const p=document.getElementById('pieces');
+  p.innerHTML=run.pieces.map((piece,i)=>pieceHTML(piece,i)).join('');
+}
+function pieceHTML(piece,i){
+  const rows=piece.shape.length, cols=Math.max(...piece.shape.map(r=>r.length));
+  let cells=''; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){const filled=piece.shape[r][c]; cells += `<div class="mini-cell ${filled?'filled '+piece.type:''}"></div>`;}
+  return `<button class="piece ${selectedPiece===i?'selected':''} ${piece.used?'used':''}" onclick="selectPiece(${i})" ${piece.used?'disabled':''}><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_LABELS[piece.type]}</strong></button>`;
+}
+function renderRunStats(){
+  document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
+}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place part shapes to begin salvage.</div>';}
+function selectPiece(i){ if(run.pieces[i].used) return; selectedPiece=i; renderPieces(); }
+function placeSelected(r,c){
+  if(selectedPiece===null){toast('Select a part shape first.'); return;}
+  const piece=run.pieces[selectedPiece]; if(!canPlace(piece,r,c)){toast('That part will not fit there.'); return;}
+  for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]) run.board[r+pr][c+pc]=piece.type;
+  piece.used=true; run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed ${RESOURCE_LABELS[piece.type]} part.`); selectedPiece=null;
+  clearLines();
+  if(run.pieces.every(p=>p.used)) dealPieces();
+  if(!anyFits()) run.log.push('No pieces fit. Claim salvage or start a new run.');
+  renderAll();
+}
+function countCells(shape){return shape.flat().filter(Boolean).length}
+function canPlace(piece,r,c){
+  for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]){if(r+pr>=8||c+pc>=8||run.board[r+pr][c+pc]) return false;}
+  return true;
+}
+function anyFits(){return run.pieces.some(p=>!p.used && Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>canPlace(p,r,c)).some(row=>row.some(Boolean))));}
+function clearLines(){
+  const rows=[], cols=[];
+  for(let r=0;r<8;r++) if(run.board[r].every(Boolean)) rows.push(r);
+  for(let c=0;c<8;c++) if(run.board.every(row=>row[c])) cols.push(c);
+  if(!rows.length && !cols.length) return;
+  const cleared=[];
+  rows.forEach(r=>{for(let c=0;c<8;c++) cleared.push([r,c]);});
+  cols.forEach(c=>{for(let r=0;r<8;r++) if(!cleared.some(x=>x[0]===r&&x[1]===c)) cleared.push([r,c]);});
+  const counts={scrap:0,gears:0,wiring:0,batteries:0};
+  cleared.forEach(([r,c])=>{const t=run.board[r][c]; if(t) counts[t]++; run.board[r][c]=null;});
+  RESOURCE_KEYS.forEach(k=>{run.rewards[k]+=counts[k];});
+  const lineCount=rows.length+cols.length; run.clears += lineCount; run.score += cleared.length*10 + Math.max(0,lineCount-1)*25;
+  run.log.push(`Cleared ${lineCount} line${lineCount>1?'s':''} and recovered ${rewardText(counts)}.`);
+}
+function claimRun(){
+  if(!run) return;
+  RESOURCE_KEYS.forEach(k=>state.resources[k]+=run.rewards[k]);
+  const summary = `Salvage claimed: ${rewardText(run.rewards)}. Base advanced by 12 hours.`;
+  state.log.push(summary); run=null; advanceTime(12, null, false); showTab('base'); toast(summary);
+}
+function advanceTime(hours, note, doRender=true){
+  state.hour += hours; while(state.hour>=24){state.hour-=24; state.day++;}
+  const genPenalty = state.rooms.generator.condition < 40 ? 0.35 : 0;
+  Object.keys(state.rooms).forEach(id=>{
+    const room=state.rooms[id], meta=ROOM_DATA[id];
+    const reduction = (meta.wear + (id==='generator'?0:genPenalty)) * (hours/12) / room.level;
+    room.condition = Math.max(0, room.condition - reduction*10);
+  });
+  if(note) state.log.push(note);
+  if(state.day>=7 && !state.log.some(x=>x.includes('7-day stability goal'))){state.log.push('7-day stability goal reached. Stage 1 loop is viable if the player can still recover and repair.');}
+  if(doRender) renderAll();
+}
+function repairRoom(id){
+  const cost=ROOM_DATA[id].repair; if(!canAfford(cost)){toast('Not enough parts for that repair. Play the puzzle for more salvage.'); return;}
+  pay(cost); state.rooms[id].condition=Math.min(100,state.rooms[id].condition+35); state.log.push(`${ROOM_DATA[id].name} repaired using ${costText(cost)}.`); renderAll(); toast(`${ROOM_DATA[id].name} repaired.`);
+}
+function upgradeRoom(id){
+  const cost={scrap:10*state.rooms[id].level, gears:3*state.rooms[id].level, wiring:2*state.rooms[id].level};
+  if(!canAfford(cost)){toast(`Upgrade needs ${costText(cost)}.`); return;}
+  pay(cost); state.rooms[id].level++; state.rooms[id].condition=Math.min(100,state.rooms[id].condition+15); state.log.push(`${ROOM_DATA[id].name} upgraded to level ${state.rooms[id].level}. Wear rate reduced.`); renderAll(); toast(`${ROOM_DATA[id].name} upgraded.`);
+}
+function canAfford(cost){return Object.keys(cost).every(k=>state.resources[k]>=cost[k]);}
+function pay(cost){Object.keys(cost).forEach(k=>state.resources[k]-=cost[k]);}
+function costText(cost){return Object.keys(cost).map(k=>`${cost[k]} ${RESOURCE_LABELS[k]}`).join(', ');}
+function rewardText(obj){return RESOURCE_KEYS.filter(k=>obj[k]>0).map(k=>`${obj[k]} ${RESOURCE_LABELS[k]}`).join(', ') || 'no parts';}
+function saveGame(show){localStorage.setItem('scrapShelterStage1', JSON.stringify({state,run,version:VERSION})); if(show) toast('Saved.');}
+function loadGame(show){const raw=localStorage.getItem('scrapShelterStage1'); if(raw){try{const data=JSON.parse(raw); state=data.state||defaultState(); run=data.run||null; renderAll(); if(show) toast('Loaded.');}catch(e){toast('Save file was unreadable.')}}}
+function resetGame(){if(confirm('Reset the Stage 1 prototype save?')){localStorage.removeItem('scrapShelterStage1'); state=defaultState(); newRun(false); run=null; renderAll(); toast('Prototype reset.');}}
+function toast(msg){const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.classList.remove('show'),2600);}
+function init(){state=defaultState(); loadGame(false); renderAll();}
+init();
+</script>
+</body>
+</html>
