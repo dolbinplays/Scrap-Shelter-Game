@@ -1,8 +1,7 @@
-# Scrap Shelter v0.26.06.04.0007 - Mobile True Shape + Sticky Actions
+Scrap Shelter v0.26.06.04.0118 - Offset Ghost No Label
 
-Patch notes:
-- Updated visible version and save key.
-- Queue mini pieces now render as tighter true-shape previews with hidden empty cells instead of visible spacer squares.
-- Puzzle action buttons are now a sticky safe-area footer in mobile fullscreen puzzle mode.
-- Board sizing was reduced on mobile so the sticky footer remains visible above browser controls.
-- Test button remains hidden on mobile but available on wider screens.
+Changes:
+- Removed the mobile floating "Fits here" text card.
+- The actual piece outline now floats above the player's finger while dragging.
+- Touch board preview now shows only a small anchor marker under the finger, keeping the shape visible above the thumb.
+- Kept PC hover/click behavior intact.

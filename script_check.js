@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.04.0007';
+const VERSION = 'v0.26.06.04.0118';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -162,8 +162,7 @@ function renderDragGhost(piece, valid, clientX, clientY){
   if(!ghost || !piece) return;
   const rows=piece.shape.length;
   const cols=Math.max(...piece.shape.map(row=>row.length));
-  const label=valid ? 'Fits here' : 'Blocked';
-  const color=`var(--${piece.type})`;
+  const color=valid ? `var(--${piece.type})` : 'var(--bad)';
   let cells='';
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
@@ -173,13 +172,18 @@ function renderDragGhost(piece, valid, clientX, clientY){
   }
   ghost.className = `drag-ghost show ${valid?'fit':'blocked'}`;
   ghost.style.setProperty('--ghost-color', color);
-  ghost.innerHTML = `<div class="ghost-grid" style="grid-template-columns:repeat(${cols},16px)">${cells}</div><div class="ghost-copy">${label}<small>${RESOURCE_LABELS[piece.type]} · lift to place</small></div>`;
-  const offsetX = 18;
-  const offsetY = -96;
-  const maxX = Math.max(8, window.innerWidth - 160);
-  const maxY = Math.max(8, window.innerHeight - 90);
-  const x = Math.min(Math.max(8, clientX + offsetX), maxX);
-  const y = Math.min(Math.max(8, clientY + offsetY), maxY);
+  ghost.innerHTML = `<div class="ghost-grid" style="grid-template-columns:repeat(${cols},22px);grid-template-rows:repeat(${rows},22px)">${cells}</div>`;
+
+  // Mobile ergonomics: the actual piece footprint floats above the player's finger.
+  // The board below keeps only a small anchor marker so the player's thumb does not hide
+  // the shape they are trying to place.
+  const ghostWidth = ghost.offsetWidth || (cols * 26 + 14);
+  const ghostHeight = ghost.offsetHeight || (rows * 26 + 14);
+  const verticalLift = ghostHeight + 44;
+  const maxX = Math.max(8, window.innerWidth - ghostWidth - 8);
+  const maxY = Math.max(8, window.innerHeight - ghostHeight - 8);
+  const x = Math.min(Math.max(8, clientX - ghostWidth / 2), maxX);
+  const y = Math.min(Math.max(8, clientY - verticalLift), maxY);
   ghost.style.transform = `translate(${x}px, ${y}px)`;
 }
 function hideDragGhost(){
@@ -291,16 +295,22 @@ function applyGhostPreview(){
     return;
   }
   const valid=canPlace(piece,hoverAnchor.r,hoverAnchor.c);
-  const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
-  ghosts.forEach(([rr,cc])=>{
-    const cell=board.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
-    if(cell){
-      cell.classList.add(valid?'ghost-fit':'ghost-blocked');
-      cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
-    }
-  });
+  const isTouchPreview = touchDragActive || mobilePreviewLocked || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  if(!isTouchPreview){
+    const ghosts=ghostCellsRaw(piece,hoverAnchor.r,hoverAnchor.c);
+    ghosts.forEach(([rr,cc])=>{
+      const cell=board.querySelector(`.cell[data-r="${rr}"][data-c="${cc}"]`);
+      if(cell){
+        cell.classList.add(valid?'ghost-fit':'ghost-blocked');
+        cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
+      }
+    });
+  }
   const anchor=board.querySelector(`.cell[data-r="${hoverAnchor.r}"][data-c="${hoverAnchor.c}"]`);
-  if(anchor) anchor.classList.add('anchor-cell');
+  if(anchor){
+    anchor.classList.add('anchor-cell');
+    anchor.style.setProperty('--ghost-color', valid ? `var(--${piece.type})` : 'var(--bad)');
+  }
   if(btn){
     btn.disabled=!valid;
     btn.textContent=valid?'Place Piece at Preview':'Preview Does Not Fit';
@@ -407,12 +417,12 @@ function renderRunStats(){
   const last=run.lastClear ? `${run.lastClear.lines} line${run.lastClear.lines>1?'s':''} · ${rewardText(run.lastClear.counts)}` : 'None yet';
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Pieces placed<b>${run.placed}</b></div><div class="stat">Line clears<b>${run.clears}</b></div><div class="stat highlight">Total salvage<b>${total}</b></div><div class="stat highlight" style="grid-column:1/-1">Last clear<b style="font-size:16px">${last}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. PC: hover/click. Phone: drag across the board to preview, then lift your finger to place.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. PC: hover/click. Phone: drag across the board and lift to place.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag for offset preview, lift to place.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag; floating outline previews, lift to place.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
