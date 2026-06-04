@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.1808 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.1828 - Stage 1 Prototype</title>
 <style>
 :root{
   --bg:#111418;
@@ -66,11 +66,10 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .cell{border-radius:8px; background:linear-gradient(180deg,#171d23,#101419); border:1px solid rgba(255,255,255,.09); min-width:0; position:relative;}
 .cell::after{content:''; position:absolute; inset:30%; border-radius:4px; background:rgba(255,255,255,.035); pointer-events:none;}
 .cell:focus-visible{outline:3px solid var(--accent); outline-offset:1px;}
-.cell.can-place{outline:2px solid rgba(119,209,122,.75); outline-offset:-3px;}
-.cell.cannot-place{outline:2px solid rgba(238,107,95,.7); outline-offset:-3px;}
-.cell.anchor-hint{box-shadow:inset 0 0 0 3px rgba(241,170,63,.8);}
-.cell.ghost{outline:2px dashed rgba(241,170,63,.85); outline-offset:-3px;}
-.cell.invalid{outline:2px dashed rgba(238,107,95,.85); outline-offset:-3px;}
+.cell.ghost-fit{outline:3px dashed var(--ghost-color,var(--accent)); outline-offset:-4px; background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035));}
+.cell.ghost-fit::before{content:''; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--ghost-color,var(--accent)); background:color-mix(in srgb, var(--ghost-color,var(--accent)) 22%, transparent); opacity:.72; pointer-events:none; z-index:2;}
+.cell.ghost-blocked{outline:3px dashed var(--bad); outline-offset:-4px;}
+.cell.ghost-blocked::before{content:'×'; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--bad); background:rgba(238,107,95,.18); color:#ffd7d2; display:flex; align-items:center; justify-content:center; font-weight:1000; pointer-events:none; z-index:3;}
 .tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); animation:tileIn .14s ease both; z-index:1;}
 @keyframes tileIn{from{transform:scale(.72); opacity:.25}to{transform:scale(1); opacity:1}}
 .tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
@@ -78,9 +77,12 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.16); filter:brightness(1.4)}100%{transform:scale(.05); opacity:0}}
 .pieces{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%;}
 .piece{background:rgba(255,255,255,.055); border:2px solid var(--line); border-radius:18px; padding:10px; min-height:116px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:8px;}
-.piece.selected{border-color:var(--accent); box-shadow:0 0 0 3px rgba(241,170,63,.25), 0 0 24px rgba(241,170,63,.16);}
+.piece.active-piece{border-color:var(--accent); box-shadow:0 0 0 3px rgba(241,170,63,.25), 0 0 24px rgba(241,170,63,.16);}
+.piece.preview-piece{opacity:.78;}
+.piece .queue-label{font-size:11px; color:var(--muted); font-weight:900; text-transform:uppercase; letter-spacing:.08em;}
+.piece.active-piece .queue-label{color:#ffd188;}
 .piece .tap-note{font-size:11px; color:var(--muted); font-weight:800; text-transform:uppercase; letter-spacing:.06em;}
-.piece.selected .tap-note{color:#ffd188;}
+.piece.active-piece .tap-note{color:#ffd188;}
 .play-help{width:100%; border:1px solid rgba(241,170,63,.35); background:rgba(241,170,63,.09); color:#f5d8a7; border-radius:16px; padding:10px 12px; line-height:1.35; font-size:14px;}
 .play-help strong{color:#fff0c6;}
 .selected-banner{width:100%; display:flex; justify-content:space-between; gap:8px; align-items:center; background:rgba(255,255,255,.055); border:1px solid var(--line); border-radius:14px; padding:9px 10px; color:var(--muted); font-size:13px;}
@@ -111,7 +113,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.1808 · Puzzle UX Fix</div>
+    <div class="version">v0.26.06.03.1828 · Forced Queue + Ghost Preview</div>
   </header>
 
   <nav class="nav">
@@ -125,7 +127,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
     <div class="grid2">
       <section class="card">
         <h2>Base Systems</h2>
-        <p>Rooms wear down after puzzle runs and test time advances. Repair them with parts recovered from the block-placement puzzle.</p>
+        <p>Rooms wear down after puzzle runs and test time advances. Repair them with parts recovered from the block-placement puzzle. The puzzle now uses a forced queue: place the left part first, while the next two parts preview what is coming.</p>
         <div class="rooms" id="rooms"></div>
         <div class="footer-actions">
           <button class="btn primary" onclick="showTab('puzzle')">Play Salvage Puzzle</button>
@@ -147,7 +149,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
     <div class="grid2">
       <section class="card board-wrap">
         <h2>Salvage Puzzle</h2>
-        <div class="play-help"><strong>How to play:</strong> tap one of the three part shapes below, then tap a board square to place its top-left corner. Filled rows or columns clear into salvage. The first piece is auto-selected for you.</div>
+        <div class="play-help"><strong>How to play:</strong> place the left part first. The other two parts are previews. Move over the board to see a ghost outline; tap/click when the outline fits. Filled rows or columns clear into salvage.</div>
         <div class="selected-banner" id="selectedBanner"></div>
         <div class="board" id="board"></div>
         <div class="pieces" id="pieces"></div>
@@ -158,7 +160,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       </section>
       <aside class="card">
         <h3>Current Run</h3>
-        <p><strong>Tap a part below the board, then tap the board.</strong> The selected part will place using the square you tap as its top-left anchor. Filled rows and columns immediately clear into resources.</p>
+        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. Hover or touch the board to preview the active part footprint, then tap/click to place it. Filled rows and columns immediately clear into resources.</p>
         <div class="run-stats" id="runStats"></div>
         <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
         <h3 style="margin-top:16px">Puzzle Notes</h3>
@@ -194,7 +196,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.1808';
+const VERSION = 'v0.26.06.03.1828';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
 const RESOURCE_LABELS = {scrap:'Scrap', gears:'Gears', wiring:'Wiring', batteries:'Batteries'};
 const RESOURCE_ICONS = {scrap:'▣', gears:'⚙', wiring:'⌁', batteries:'▮'};
@@ -207,21 +209,30 @@ const SHAPES = [
   [[1]], [[1,1]], [[1],[1]], [[1,1,1]], [[1],[1],[1]], [[1,1],[1,0]], [[1,1],[0,1]], [[1,0],[1,1]], [[0,1],[1,1]], [[1,1],[1,1]], [[1,1,1],[0,1,0]], [[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]]
 ];
 let state;
-let selectedPiece = null;
+let selectedPiece = 0;
+let hoverAnchor = null;
 let run = null;
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
   run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, log:[]};
-  selectedPiece=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
+  selectedPiece=0; hoverAnchor=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
-function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; selectedPiece = 0;}
+function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; selectedPiece = 0; hoverAnchor=null;}
 function makePiece(){const shape=SHAPES[Math.floor(Math.random()*SHAPES.length)]; const type=RESOURCE_KEYS[Math.floor(Math.random()*RESOURCE_KEYS.length)]; return {shape,type,used:false,id:Math.random().toString(36).slice(2)};}
+
+function normalizeRunQueue(){
+  if(!run) return;
+  if(!Array.isArray(run.pieces)) run.pieces=[];
+  run.pieces = run.pieces.filter(p=>p && !p.used).slice(0,3);
+  while(run.pieces.length<3) run.pieces.push(makePiece());
+  selectedPiece=0;
+}
 function showTab(tab){
   for(const id of ['base','puzzle','inventory']){document.getElementById(id+'View').classList.toggle('hidden', id!==tab); document.getElementById('tab'+cap(id)).classList.toggle('active', id===tab)}
   if(tab==='puzzle' && !run) newRun(false); renderAll();
 }
 function cap(s){return s[0].toUpperCase()+s.slice(1)}
-function renderAll(){renderResources(); renderRooms(); renderStatus(); renderLog(); if(run){ensureSelectedPiece(); renderBoard(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog();} saveGame(false);}
+function renderAll(){renderResources(); renderRooms(); renderStatus(); renderLog(); if(run){normalizeRunQueue(); renderBoard(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog();} saveGame(false);}
 function renderResources(){
   const html = RESOURCE_KEYS.map(k=>`<div class="resource"><span><span class="dot ${k}"></span> <span class="label">${RESOURCE_LABELS[k]}</span></span><span class="value">${state.resources[k]}</span></div>`).join('');
   document.getElementById('resourceBar').innerHTML=html; document.getElementById('inventoryResources').innerHTML=html;
@@ -247,18 +258,24 @@ function renderStatus(){
 function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
 function renderBoard(){
   const b=document.getElementById('board'); b.innerHTML='';
-  const piece = selectedPiece!==null ? run.pieces[selectedPiece] : null;
+  const piece = getActivePiece();
+  const ghost = piece && hoverAnchor ? ghostCells(piece, hoverAnchor.r, hoverAnchor.c) : null;
+  const ghostValid = piece && hoverAnchor ? canPlace(piece, hoverAnchor.r, hoverAnchor.c) : false;
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const cell=document.createElement('button');
     let cls='cell';
-    if(piece && !piece.used && !run.board[r][c]) cls += canPlace(piece,r,c) ? ' can-place' : ' cannot-place';
-    if(piece && selectedPiece!==null && r===0 && c===0 && canPlace(piece,r,c)) cls += ' anchor-hint';
+    const ghostHere = ghost && ghost.some(g=>g[0]===r && g[1]===c);
+    if(ghostHere) cls += ghostValid ? ' ghost-fit' : ' ghost-blocked';
     cell.className=cls;
-    cell.onclick=()=>placeSelected(r,c);
+    if(ghostHere && piece) cell.style.setProperty('--ghost-color', `var(--${piece.type})`);
+    cell.onpointerenter=()=>setHoverAnchor(r,c);
+    cell.onpointerdown=()=>setHoverAnchor(r,c);
+    cell.onclick=()=>placeActive(r,c);
     cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
     const type=run.board[r][c]; if(type){const t=document.createElement('div'); t.className='tile '+type; t.textContent=RESOURCE_ICONS[type]; cell.appendChild(t);}
     b.appendChild(cell);
   }
+  b.onpointerleave=()=>{hoverAnchor=null; renderBoard();};
 }
 function renderPieces(){
   const p=document.getElementById('pieces');
@@ -266,35 +283,43 @@ function renderPieces(){
 }
 function pieceHTML(piece,i){
   const rows=piece.shape.length, cols=Math.max(...piece.shape.map(r=>r.length));
+  const label = i===0 ? 'Place now' : `Preview ${i}`;
   let cells=''; for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){const filled=piece.shape[r][c]; cells += `<div class="mini-cell ${filled?'filled '+piece.type:''}"></div>`;}
-  return `<button class="piece ${selectedPiece===i?'selected':''} ${piece.used?'used':''}" onclick="selectPiece(${i})" ${piece.used?'disabled':''}><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_LABELS[piece.type]}</strong><span class="tap-note">${selectedPiece===i?'Selected · tap board':'Tap to select'}</span></button>`;
+  return `<div class="piece ${i===0?'active-piece':'preview-piece'}"><span class="queue-label">${label}</span><div class="mini-grid" style="grid-template-columns:repeat(${cols},22px)">${cells}</div><strong>${RESOURCE_LABELS[piece.type]}</strong><span class="tap-note">${i===0?'Move over board · tap to place':'Coming soon'}</span></div>`;
 }
 function renderRunStats(){
   document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Tap the highlighted part, then tap the board to place it. Filled rows and columns become salvage.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then tap/click to lock it in.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
-  ensureSelectedPiece();
-  if(selectedPiece===null){el.innerHTML='<span>No part selected.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const piece=run.pieces[selectedPiece];
-  el.innerHTML=`<span>Selected part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>Now tap a green board square.</span>`;
+  const piece=getActivePiece();
+  if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — tap/click to place.' : 'Does not fit here.') : 'Move over the board to preview placement.';
+  el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
-function ensureSelectedPiece(){
-  if(!run || (selectedPiece!==null && run.pieces[selectedPiece] && !run.pieces[selectedPiece].used)) return;
-  const next = run.pieces.findIndex(p=>!p.used);
-  selectedPiece = next>=0 ? next : null;
+function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
+function setHoverAnchor(r,c){
+  hoverAnchor={r,c};
+  renderBoard();
+  renderSelectedBanner();
 }
-function selectPiece(i){ if(run.pieces[i].used) return; selectedPiece=i; renderBoard(); renderPieces(); renderSelectedBanner(); }
-function placeSelected(r,c){
-  ensureSelectedPiece();
-  if(selectedPiece===null){toast('No part is available. Claim salvage or start a new puzzle.'); return;}
-  const piece=run.pieces[selectedPiece]; if(!canPlace(piece,r,c)){toast('That part will not fit there.'); return;}
+function ghostCells(piece,r,c){
+  const cells=[];
+  for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]) cells.push([r+pr,c+pc]);
+  return cells.filter(([rr,cc])=>rr>=0&&rr<8&&cc>=0&&cc<8);
+}
+function placeActive(r,c){
+  const piece=getActivePiece();
+  if(!piece){toast('No part is available. Claim salvage or start a new puzzle.'); return;}
+  if(!canPlace(piece,r,c)){hoverAnchor={r,c}; renderAll(); toast('That part will not fit there.'); return;}
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]) run.board[r+pr][c+pc]=piece.type;
-  piece.used=true; run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed ${RESOURCE_LABELS[piece.type]} part on the board.`); selectedPiece=null;
+  run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed ${RESOURCE_LABELS[piece.type]} part from the front of the queue.`);
+  run.pieces.shift();
+  run.pieces.push(makePiece());
+  hoverAnchor=null;
   clearLines();
-  if(run.pieces.every(p=>p.used)) dealPieces();
-  if(!anyFits()) run.log.push('No pieces fit. Claim salvage or start a new run.');
+  if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');
   renderAll();
 }
 function countCells(shape){return shape.flat().filter(Boolean).length}
@@ -302,7 +327,8 @@ function canPlace(piece,r,c){
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]){if(r+pr>=8||c+pc>=8||run.board[r+pr][c+pc]) return false;}
   return true;
 }
-function anyFits(){return run.pieces.some(p=>!p.used && Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>canPlace(p,r,c)).some(row=>row.some(Boolean))));}
+function canPlaceAny(piece){return !!piece && Array.from({length:8},(_,r)=>Array.from({length:8},(_,c)=>canPlace(piece,r,c)).some(row=>row.some(Boolean)));}
+function anyFits(){return run.pieces.some(p=>canPlaceAny(p));}
 function clearLines(){
   const rows=[], cols=[];
   for(let r=0;r<8;r++) if(run.board[r].every(Boolean)) rows.push(r);
