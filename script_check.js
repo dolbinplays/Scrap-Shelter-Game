@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.03.2118';
+const VERSION = 'v0.26.06.03.2246';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -18,9 +18,11 @@ let selectedPiece = 0;
 let hoverAnchor = null;
 let run = null;
 let lastBoardPlaceAt = 0;
+let suppressCompatClickUntil = 0;
+let lastTouchPreviewAt = 0;
 function defaultState(){return {day:1,hour:8,resources:{scrap:12,gears:3,wiring:2,batteries:1},rooms:{workshop:{condition:80,level:1},generator:{condition:65,level:1},water:{condition:70,level:1}},log:['Prototype initialized. The base is barely running, but recoverable.']};}
 function newRun(reset){
-  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, log:[]};
+  run={board:Array.from({length:8},()=>Array(8).fill(null)), pieces:[], rewards:{scrap:0,gears:0,wiring:0,batteries:0}, score:0, clears:0, placed:0, queueStep:1, nextPieceSeq:1, queueRenderCount:0, lastClear:null, bestClear:0, log:[]};
   selectedPiece=0; hoverAnchor=null; dealPieces(); renderAll(); if(reset) toast('New puzzle run started.');
 }
 function dealPieces(){run.pieces = [makePiece(),makePiece(),makePiece()]; run.queueStep=run.queueStep||1; selectedPiece = 0; hoverAnchor=null;}
@@ -157,6 +159,19 @@ function handleBoardPointerDown(event){
   const pos = boardCellFromEvent(event);
   if(!pos) return;
   event.preventDefault();
+
+  // Mobile/touch placement should be preview-first. A finger tap cannot hover,
+  // so tapping the board selects the anchor and shows the footprint only.
+  // The player then confirms with the Place Piece at Preview button.
+  if(event.pointerType === 'touch' || event.pointerType === 'pen'){
+    suppressCompatClickUntil = Date.now() + 650;
+    lastTouchPreviewAt = Date.now();
+    setHoverAnchor(pos.r,pos.c);
+    toast(canPlace(getActivePiece(),pos.r,pos.c) ? 'Preview set. Tap Place Piece at Preview to lock it in.' : 'Preview set, but this part does not fit there.');
+    return;
+  }
+
+  // Mouse/trackpad keeps the faster desktop feel: click places immediately.
   setHoverAnchor(pos.r,pos.c);
   commitPreviewPlacement();
 }
@@ -164,6 +179,7 @@ function handleBoardClick(event){
   const pos = boardCellFromEvent(event);
   if(!pos) return;
   event.preventDefault();
+  if(Date.now() < suppressCompatClickUntil) return;
   if(Date.now() - lastBoardPlaceAt > 250){ setHoverAnchor(pos.r,pos.c); commitPreviewPlacement(); }
 }
 function applyGhostPreview(){
@@ -206,14 +222,24 @@ function clearPreviewAnchor(){
 function renderPieces(){
   if(!run) return;
   normalizeRunQueue();
-  const p=document.getElementById('pieces');
+  const oldPanel=document.getElementById('pieces');
   const q=document.getElementById('queueDebug');
-  if(!p) return;
+  if(!oldPanel) return;
   run.queueRenderCount = (run.queueRenderCount || 0) + 1;
   const signature = `${run.queueStep}|${run.pieces.map(piece=>piece.id).join('|')}|render${run.queueRenderCount}`;
-  p.dataset.queueSignature = signature;
-  p.innerHTML='';
-  run.pieces.forEach((piece,i)=>p.appendChild(pieceNode(piece,i)));
+
+  // Hard refresh the queue panel instead of only changing innerHTML. Some browser/mobile
+  // combinations were visually keeping the original three piece cards even after the
+  // queue state advanced, while the selected-banner state updated correctly.
+  const freshPanel=document.createElement('div');
+  freshPanel.className='pieces';
+  freshPanel.id='pieces';
+  freshPanel.dataset.queueSignature = signature;
+  freshPanel.dataset.activePieceId = run.pieces[0] ? run.pieces[0].id : '';
+  freshPanel.dataset.queueStep = String(run.queueStep || 1);
+  run.pieces.forEach((piece,i)=>freshPanel.appendChild(pieceNode(piece,i)));
+  oldPanel.replaceWith(freshPanel);
+
   if(q){
     const active=run.pieces[0];
     const previews=run.pieces.slice(1).map(piece=>`#${piece.seq || '?'} ${RESOURCE_LABELS[piece.type]}`).join(' → ');
@@ -252,7 +278,7 @@ function pieceNode(piece,i){
 
   const note=document.createElement('span');
   note.className='tap-note';
-  note.textContent=i===0?'Active piece · tap board to place':`Coming after #${run.pieces[i-1] ? run.pieces[i-1].seq : '?'}`;
+  note.textContent=i===0?'Active piece · PC click places · phone tap previews first':`Coming after #${run.pieces[i-1] ? run.pieces[i-1].seq : '?'}`;
   wrapper.appendChild(note);
 
   const id=document.createElement('span');
@@ -262,14 +288,16 @@ function pieceNode(piece,i){
   return wrapper;
 }
 function renderRunStats(){
-  document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Clears<b>${run.clears}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
+  const total=RESOURCE_KEYS.reduce((sum,k)=>sum+(run.rewards[k]||0),0);
+  const last=run.lastClear ? `${run.lastClear.lines} line${run.lastClear.lines>1?'s':''} · ${rewardText(run.lastClear.counts)}` : 'None yet';
+  document.getElementById('runStats').innerHTML = `<div class="stat">Score<b>${run.score}</b></div><div class="stat">Pieces placed<b>${run.placed}</b></div><div class="stat">Line clears<b>${run.clears}</b></div><div class="stat highlight">Total salvage<b>${total}</b></div><div class="stat highlight" style="grid-column:1/-1">Last clear<b style="font-size:16px">${last}</b></div>` + RESOURCE_KEYS.map(k=>`<div class="stat">${RESOURCE_LABELS[k]}<b>${run.rewards[k]}</b></div>`).join('');
 }
-function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then tap/click to lock it in. On phones, tap the desired board square to place immediately.</div>';}
+function renderPuzzleLog(){document.getElementById('puzzleLog').innerHTML = run.log.slice(-8).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>Place the left part first. Move over the board to preview its footprint, then click to lock it in on PC. On phones, tap a board square to preview, then press Place Piece at Preview.</div>';}
 function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — tap/click to place.' : 'Does not fit here.') : 'Move over the board to preview placement, or tap a board square to place on phones.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places immediately; phone users press Place Piece at Preview.' : 'Does not fit here.') : 'PC: move/click to place. Phone: tap a square to preview, then press Place Piece at Preview.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
@@ -297,6 +325,7 @@ function placeActive(r,c){
   paintPlacedCellsNow(placedCells);
   run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed #${run.queueStep||1}: ${RESOURCE_LABELS[piece.type]} part from the front of the queue.`);
   advancePieceQueue();
+  renderPieces(); // immediately rebuild queue cards before any later board/ghost updates
   hoverAnchor=null;
   clearLines();
   updateBoardVisuals();
@@ -316,11 +345,12 @@ function verifyQueuePanelFresh(){
   const active = getActivePiece();
   const panel = document.querySelector('#pieces .active-piece');
   const visibleSeq = panel ? Number(panel.dataset.pieceSeq) : NaN;
-  if(active && (!panel || panel.dataset.pieceId !== active.id || visibleSeq !== Number(active.seq))){
+  const visibleId = panel ? panel.dataset.pieceId : '';
+  if(active && (!panel || visibleId !== active.id || visibleSeq !== Number(active.seq))){
     renderPieces();
     renderSelectedBanner();
     const q=document.getElementById('queueDebug');
-    if(q) q.innerHTML += ' · <strong>refreshed</strong>';
+    if(q) q.innerHTML += ' · <strong>hard refreshed</strong>';
   }
 }
 function verifyPlacedTilesRendered(){
@@ -370,13 +400,46 @@ function clearLines(){
   const counts={scrap:0,gears:0,wiring:0,batteries:0};
   cleared.forEach(([r,c])=>{const t=run.board[r][c]; if(t) counts[t]++; run.board[r][c]=null;});
   RESOURCE_KEYS.forEach(k=>{run.rewards[k]+=counts[k];});
-  const lineCount=rows.length+cols.length; run.clears += lineCount; run.score += cleared.length*10 + Math.max(0,lineCount-1)*25;
-  run.log.push(`Cleared ${lineCount} line${lineCount>1?'s':''} and recovered ${rewardText(counts)}.`);
+  const lineCount=rows.length+cols.length;
+  const multiBonus=Math.max(0,lineCount-1)*25;
+  run.clears += lineCount;
+  run.bestClear=Math.max(run.bestClear||0,lineCount);
+  run.score += cleared.length*10 + multiBonus;
+  run.lastClear={lines:lineCount, cells:cleared.length, counts, score:cleared.length*10+multiBonus};
+  const message=`Cleared ${lineCount} line${lineCount>1?'s':''} and recovered ${rewardText(counts)}${multiBonus?` · multi-line bonus +${multiBonus}`:''}.`;
+  run.log.push(message);
+  showClearPop(lineCount, counts, multiBonus);
 }
+function showClearPop(lineCount, counts, bonus){
+  const old=document.querySelector('.clear-pop');
+  if(old) old.remove();
+  const el=document.createElement('div');
+  el.className='clear-pop';
+  el.innerHTML=`${lineCount} LINE${lineCount>1?'S':''} CLEARED<small>${rewardText(counts)}${bonus?` · +${bonus} score bonus`:''}</small>`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1400);
+}
+function showRunSummary(){
+  if(!run) return;
+  const total=RESOURCE_KEYS.reduce((sum,k)=>sum+(run.rewards[k]||0),0);
+  document.getElementById('summaryLead').textContent = total>0 ? 'Recovered salvage is ready to move into base inventory.' : 'No salvage recovered yet. You can keep playing or return with nothing.';
+  const rows=[
+    ['Score', run.score],
+    ['Pieces placed', run.placed],
+    ['Line clears', run.clears],
+    ['Best clear', `${run.bestClear||0} line${(run.bestClear||0)===1?'':'s'}`],
+    ...RESOURCE_KEYS.map(k=>[RESOURCE_LABELS[k], run.rewards[k]||0]),
+    ['Total salvage', total]
+  ];
+  document.getElementById('summaryGrid').innerHTML = rows.map(([label,value])=>`<div class="summary-item ${label==='Total salvage'?'summary-total':''}">${label}<strong>${value}</strong></div>`).join('');
+  document.getElementById('runSummaryModal').classList.remove('hidden');
+}
+function closeRunSummary(){document.getElementById('runSummaryModal').classList.add('hidden');}
+function confirmClaimRun(){closeRunSummary(); claimRun();}
 function claimRun(){
   if(!run) return;
   RESOURCE_KEYS.forEach(k=>state.resources[k]+=run.rewards[k]);
-  const summary = `Salvage claimed: ${rewardText(run.rewards)}. Base advanced by 12 hours.`;
+  const summary = `Salvage claimed: ${rewardText(run.rewards)} · score ${run.score}. Base advanced by 12 hours.`;
   state.log.push(summary); run=null; advanceTime(12, null, false); showTab('base'); toast(summary);
 }
 function advanceTime(hours, note, doRender=true){
