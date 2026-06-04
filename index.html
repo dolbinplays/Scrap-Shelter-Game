@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.2026 - Stage 1 Prototype</title>
+<title>Scrap Shelter v0.26.06.03.2048 - Stage 1 Prototype</title>
 <style>
 :root{
   --bg:#111418;
@@ -73,8 +73,9 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 .cell.ghost-blocked{outline:3px dashed var(--bad); outline-offset:-4px;}
 .cell.ghost-blocked::before{content:'×'; position:absolute; inset:7px; border-radius:7px; border:2px solid var(--bad); background:rgba(238,107,95,.18); color:#ffd7d2; display:flex; align-items:center; justify-content:center; font-weight:1000; pointer-events:none; z-index:7;}
 .cell.anchor-cell{outline:3px solid #ffd188; outline-offset:-3px;}
-.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); animation:tileIn .14s ease both; z-index:10; pointer-events:none;}
+.tile{position:absolute; inset:3px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-weight:900; color:#101010; font-size:clamp(12px,2.8vw,19px); box-shadow:inset 0 -5px rgba(0,0,0,.16), 0 2px 0 rgba(255,255,255,.12); z-index:10; pointer-events:none;}
 @keyframes tileIn{from{transform:scale(.72); opacity:.25}to{transform:scale(1); opacity:1}}
+.cell.occupied .tile{opacity:1 !important; transform:none !important; display:flex !important;}
 .tile.scrap{background:var(--scrap)} .tile.gears{background:var(--gears)} .tile.wiring{background:var(--wiring)} .tile.batteries{background:var(--batteries)}
 .tile.clearing{animation:pop .28s ease both;}
 @keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.16); filter:brightness(1.4)}100%{transform:scale(.05); opacity:0}}
@@ -116,7 +117,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.2026 · Render Persistence + Save Fix</div>
+    <div class="version">v0.26.06.03.2048 · Immediate Tile Render Fix</div>
   </header>
 
   <nav class="nav">
@@ -201,7 +202,7 @@ button{font:inherit; color:inherit; cursor:pointer; border:0;}
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSION = 'v0.26.06.03.2026';
+const VERSION = 'v0.26.06.03.2048';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -266,33 +267,75 @@ function renderStatus(){
 }
 function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
 function renderBoard(){
-  const b=document.getElementById('board'); b.innerHTML='';
+  ensureBoardCells();
+  updateBoardVisuals();
+}
+function ensureBoardCells(){
+  const b=document.getElementById('board');
+  if(!b) return;
+  if(b.dataset.ready === '1' && b.querySelectorAll('.cell').length === 64) return;
+  b.innerHTML='';
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const cell=document.createElement('button');
     cell.type='button';
     cell.dataset.r=String(r);
     cell.dataset.c=String(c);
-    const type=run.board[r][c];
-    cell.className=type ? `cell occupied ${type}` : 'cell';
-    cell.dataset.occupied = type ? '1' : '0';
+    cell.className='cell';
+    cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
     cell.onpointerenter=()=>setHoverAnchor(r,c);
     cell.onpointermove=()=>setHoverAnchor(r,c);
     cell.onfocus=()=>setHoverAnchor(r,c);
-    cell.onpointerdown=(event)=>{ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); };
-    cell.onclick=(event)=>{ event.preventDefault(); if(Date.now() - lastBoardPlaceAt > 250){ setHoverAnchor(r,c); commitPreviewPlacement(); } };
     cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); } };
-    cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
-    if(type){
-      const t=document.createElement('div');
-      t.className='tile '+type;
-      t.dataset.tileType=type;
-      t.textContent=RESOURCE_ICONS[type];
-      cell.appendChild(t);
-    }
     b.appendChild(cell);
   }
+  b.dataset.ready='1';
+  b.onpointerdown=handleBoardPointerDown;
+  b.onclick=handleBoardClick;
   b.onpointerleave=()=>{hoverAnchor=null; applyGhostPreview(); renderSelectedBanner();};
+}
+function updateBoardVisuals(){
+  const board=document.getElementById('board');
+  if(!board || !run) return;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const cell=board.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    if(!cell) continue;
+    const type=run.board[r][c];
+    cell.classList.remove('occupied','scrap','gears','wiring','batteries','ghost-fit','ghost-blocked','anchor-cell');
+    cell.style.removeProperty('--ghost-color');
+    cell.dataset.occupied = type ? '1' : '0';
+    const existing=cell.querySelector('.tile');
+    if(type){
+      cell.classList.add('occupied', type);
+      if(!existing || existing.dataset.tileType !== type){
+        cell.innerHTML='';
+        const t=document.createElement('div');
+        t.className='tile '+type;
+        t.dataset.tileType=type;
+        t.textContent=RESOURCE_ICONS[type];
+        cell.appendChild(t);
+      }
+    }else if(existing){
+      existing.remove();
+    }
+  }
   applyGhostPreview();
+}
+function paintPlacedCellsNow(cells){
+  const board=document.getElementById('board');
+  if(!board || !Array.isArray(cells)) return;
+  cells.forEach(([r,c,type])=>{
+    const cell=board.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    if(!cell) return;
+    cell.classList.remove('ghost-fit','ghost-blocked','anchor-cell');
+    cell.classList.add('occupied', type);
+    cell.dataset.occupied='1';
+    cell.innerHTML='';
+    const t=document.createElement('div');
+    t.className='tile '+type;
+    t.dataset.tileType=type;
+    t.textContent=RESOURCE_ICONS[type];
+    cell.appendChild(t);
+  });
 }
 function boardCellFromEvent(event){
   const cell = event.target.closest && event.target.closest('.cell');
@@ -390,18 +433,20 @@ function ghostCells(piece,r,c){
 function placeActive(r,c){
   const piece=getActivePiece();
   if(!piece){toast('No part is available. Claim salvage or start a new puzzle.'); return;}
-  if(!canPlace(piece,r,c)){hoverAnchor={r,c}; renderAll(); toast('That part will not fit there.'); return;}
+  if(!canPlace(piece,r,c)){hoverAnchor={r,c}; updateBoardVisuals(); renderSelectedBanner(); toast('That part will not fit there.'); return;}
   const placedCells=[];
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]){ run.board[r+pr][c+pc]=piece.type; placedCells.push([r+pr,c+pc,piece.type]); }
   run.lastPlacedCells=placedCells;
+  // Paint immediately before any other state/UI work so the player gets instant visual confirmation.
+  paintPlacedCellsNow(placedCells);
   run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed #${run.queueStep||1}: ${RESOURCE_LABELS[piece.type]} part from the front of the queue.`);
   advancePieceQueue();
   hoverAnchor=null;
   clearLines();
+  updateBoardVisuals();
   if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');
-  renderAll();
-  verifyQueuePanelFresh();
-  verifyPlacedTilesRendered();
+  renderResources(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog(); saveGame(false);
+  requestAnimationFrame(()=>{ updateBoardVisuals(); verifyQueuePanelFresh(); verifyPlacedTilesRendered(); });
 }
 function advancePieceQueue(){
   if(!run) return;

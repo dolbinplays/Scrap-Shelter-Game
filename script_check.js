@@ -1,5 +1,5 @@
 
-const VERSION = 'v0.26.06.03.2026';
+const VERSION = 'v0.26.06.03.2048';
 const SAVE_KEY = 'scrapShelterStage1_' + VERSION;
 const LEGACY_SAVE_KEY = 'scrapShelterStage1';
 const RESOURCE_KEYS = ['scrap','gears','wiring','batteries'];
@@ -64,33 +64,75 @@ function renderStatus(){
 }
 function renderLog(){document.getElementById('log').innerHTML = state.log.slice(-10).reverse().map(l=>`<div>${l}</div>`).join('') || '<div>No events yet.</div>';}
 function renderBoard(){
-  const b=document.getElementById('board'); b.innerHTML='';
+  ensureBoardCells();
+  updateBoardVisuals();
+}
+function ensureBoardCells(){
+  const b=document.getElementById('board');
+  if(!b) return;
+  if(b.dataset.ready === '1' && b.querySelectorAll('.cell').length === 64) return;
+  b.innerHTML='';
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const cell=document.createElement('button');
     cell.type='button';
     cell.dataset.r=String(r);
     cell.dataset.c=String(c);
-    const type=run.board[r][c];
-    cell.className=type ? `cell occupied ${type}` : 'cell';
-    cell.dataset.occupied = type ? '1' : '0';
+    cell.className='cell';
+    cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
     cell.onpointerenter=()=>setHoverAnchor(r,c);
     cell.onpointermove=()=>setHoverAnchor(r,c);
     cell.onfocus=()=>setHoverAnchor(r,c);
-    cell.onpointerdown=(event)=>{ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); };
-    cell.onclick=(event)=>{ event.preventDefault(); if(Date.now() - lastBoardPlaceAt > 250){ setHoverAnchor(r,c); commitPreviewPlacement(); } };
     cell.onkeydown=(event)=>{ if(event.key==='Enter'||event.key===' '){ event.preventDefault(); setHoverAnchor(r,c); commitPreviewPlacement(); } };
-    cell.setAttribute('aria-label',`row ${r+1} column ${c+1}`);
-    if(type){
-      const t=document.createElement('div');
-      t.className='tile '+type;
-      t.dataset.tileType=type;
-      t.textContent=RESOURCE_ICONS[type];
-      cell.appendChild(t);
-    }
     b.appendChild(cell);
   }
+  b.dataset.ready='1';
+  b.onpointerdown=handleBoardPointerDown;
+  b.onclick=handleBoardClick;
   b.onpointerleave=()=>{hoverAnchor=null; applyGhostPreview(); renderSelectedBanner();};
+}
+function updateBoardVisuals(){
+  const board=document.getElementById('board');
+  if(!board || !run) return;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const cell=board.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    if(!cell) continue;
+    const type=run.board[r][c];
+    cell.classList.remove('occupied','scrap','gears','wiring','batteries','ghost-fit','ghost-blocked','anchor-cell');
+    cell.style.removeProperty('--ghost-color');
+    cell.dataset.occupied = type ? '1' : '0';
+    const existing=cell.querySelector('.tile');
+    if(type){
+      cell.classList.add('occupied', type);
+      if(!existing || existing.dataset.tileType !== type){
+        cell.innerHTML='';
+        const t=document.createElement('div');
+        t.className='tile '+type;
+        t.dataset.tileType=type;
+        t.textContent=RESOURCE_ICONS[type];
+        cell.appendChild(t);
+      }
+    }else if(existing){
+      existing.remove();
+    }
+  }
   applyGhostPreview();
+}
+function paintPlacedCellsNow(cells){
+  const board=document.getElementById('board');
+  if(!board || !Array.isArray(cells)) return;
+  cells.forEach(([r,c,type])=>{
+    const cell=board.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+    if(!cell) return;
+    cell.classList.remove('ghost-fit','ghost-blocked','anchor-cell');
+    cell.classList.add('occupied', type);
+    cell.dataset.occupied='1';
+    cell.innerHTML='';
+    const t=document.createElement('div');
+    t.className='tile '+type;
+    t.dataset.tileType=type;
+    t.textContent=RESOURCE_ICONS[type];
+    cell.appendChild(t);
+  });
 }
 function boardCellFromEvent(event){
   const cell = event.target.closest && event.target.closest('.cell');
@@ -188,18 +230,20 @@ function ghostCells(piece,r,c){
 function placeActive(r,c){
   const piece=getActivePiece();
   if(!piece){toast('No part is available. Claim salvage or start a new puzzle.'); return;}
-  if(!canPlace(piece,r,c)){hoverAnchor={r,c}; renderAll(); toast('That part will not fit there.'); return;}
+  if(!canPlace(piece,r,c)){hoverAnchor={r,c}; updateBoardVisuals(); renderSelectedBanner(); toast('That part will not fit there.'); return;}
   const placedCells=[];
   for(let pr=0;pr<piece.shape.length;pr++) for(let pc=0;pc<piece.shape[pr].length;pc++) if(piece.shape[pr][pc]){ run.board[r+pr][c+pc]=piece.type; placedCells.push([r+pr,c+pc,piece.type]); }
   run.lastPlacedCells=placedCells;
+  // Paint immediately before any other state/UI work so the player gets instant visual confirmation.
+  paintPlacedCellsNow(placedCells);
   run.placed++; run.score += countCells(piece.shape)*5; run.log.push(`Placed #${run.queueStep||1}: ${RESOURCE_LABELS[piece.type]} part from the front of the queue.`);
   advancePieceQueue();
   hoverAnchor=null;
   clearLines();
+  updateBoardVisuals();
   if(!canPlaceAny(getActivePiece())) run.log.push('The next queued part has no legal placement. Claim salvage or start a new run.');
-  renderAll();
-  verifyQueuePanelFresh();
-  verifyPlacedTilesRendered();
+  renderResources(); renderPieces(); renderSelectedBanner(); renderRunStats(); renderPuzzleLog(); saveGame(false);
+  requestAnimationFrame(()=>{ updateBoardVisuals(); verifyQueuePanelFresh(); verifyPlacedTilesRendered(); });
 }
 function advancePieceQueue(){
   if(!run) return;
