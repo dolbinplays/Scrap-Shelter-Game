@@ -156,6 +156,44 @@ function paintPlacedCellsNow(cells){
     cell.appendChild(t);
   });
 }
+
+function renderDragGhost(piece, valid, clientX, clientY){
+  const ghost=document.getElementById('dragGhost');
+  if(!ghost || !piece) return;
+  const rows=piece.shape.length;
+  const cols=Math.max(...piece.shape.map(row=>row.length));
+  const label=valid ? 'Fits here' : 'Blocked';
+  const color=`var(--${piece.type})`;
+  let cells='';
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const filled=!!(piece.shape[r] && piece.shape[r][c]);
+      cells += `<span class="ghost-mini ${filled?'filled':''}"></span>`;
+    }
+  }
+  ghost.className = `drag-ghost show ${valid?'fit':'blocked'}`;
+  ghost.style.setProperty('--ghost-color', color);
+  ghost.innerHTML = `<div class="ghost-grid" style="grid-template-columns:repeat(${cols},16px)">${cells}</div><div class="ghost-copy">${label}<small>${RESOURCE_LABELS[piece.type]} · lift to place</small></div>`;
+  const offsetX = 18;
+  const offsetY = -96;
+  const maxX = Math.max(8, window.innerWidth - 160);
+  const maxY = Math.max(8, window.innerHeight - 90);
+  const x = Math.min(Math.max(8, clientX + offsetX), maxX);
+  const y = Math.min(Math.max(8, clientY + offsetY), maxY);
+  ghost.style.transform = `translate(${x}px, ${y}px)`;
+}
+function hideDragGhost(){
+  const ghost=document.getElementById('dragGhost');
+  if(!ghost) return;
+  ghost.classList.remove('show','fit','blocked');
+  ghost.style.transform='translate(-9999px,-9999px)';
+}
+function updateTouchDragGhost(event, pos){
+  const piece=getActivePiece();
+  if(!piece || !pos){ hideDragGhost(); return; }
+  renderDragGhost(piece, canPlace(piece,pos.r,pos.c), event.clientX, event.clientY);
+}
+
 function boardCellFromEvent(event){
   const cell = event.target.closest && event.target.closest('.cell');
   const board = document.getElementById('board');
@@ -185,6 +223,7 @@ function handleBoardPointerDown(event){
       try{board.setPointerCapture(event.pointerId);}catch(e){}
     }
     setHoverAnchor(pos.r,pos.c);
+    updateTouchDragGhost(event, pos);
     return;
   }
 
@@ -196,7 +235,7 @@ function handleBoardPointerMove(event){
     if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
     event.preventDefault();
     const pos = boardCellFromPoint(event.clientX,event.clientY);
-    if(pos) setHoverAnchor(pos.r,pos.c);
+    if(pos){ setHoverAnchor(pos.r,pos.c); updateTouchDragGhost(event, pos); }
     return;
   }
   const pos = boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY);
@@ -216,6 +255,7 @@ function handleBoardPointerUp(event){
   touchDragActive = false;
   activeTouchPointerId = null;
   mobilePreviewLocked = false;
+  hideDragGhost();
   if(hoverAnchor && canPlace(getActivePiece(), hoverAnchor.r, hoverAnchor.c)){
     commitPreviewPlacement();
   }else{
@@ -227,6 +267,7 @@ function handleBoardPointerCancel(event){
   touchDragActive = false;
   activeTouchPointerId = null;
   mobilePreviewLocked = false;
+  hideDragGhost();
 }
 function handleBoardClick(event){
   const pos = boardCellFromEvent(event);
@@ -273,6 +314,7 @@ function commitPreviewPlacement(){
 function clearPreviewAnchor(){
   hoverAnchor=null;
   mobilePreviewLocked=false;
+  hideDragGhost();
   applyGhostPreview();
   renderSelectedBanner();
 }
@@ -354,7 +396,7 @@ function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift finger to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag across the board to preview, then lift to place.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag for offset preview, lift to place.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }

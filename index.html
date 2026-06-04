@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Scrap Shelter v0.26.06.03.2340 - Fullscreen Drag Drop Mobile</title>
+<title>Scrap Shelter v0.26.06.03.2359 - Mobile Compact Queue + Finger Ghost</title>
 <style>
 :root{
   --bg:#111418;
@@ -156,6 +156,48 @@ body.puzzle-mode .stat b{font-size:18px;}
   body.puzzle-mode .mini-cell{width:16px; height:16px;}
 }
 
+
+/* v0.26.06.03.2359 - mobile compact queue and finger-offset ghost */
+.drag-ghost{position:fixed; left:0; top:0; transform:translate(-9999px,-9999px); z-index:1300; pointer-events:none; display:none; align-items:center; gap:8px; background:rgba(8,10,13,.93); border:2px solid var(--accent); border-radius:16px; padding:8px 10px; box-shadow:0 10px 28px rgba(0,0,0,.48); min-width:138px; backdrop-filter:blur(8px);}
+.drag-ghost.show{display:flex;}
+.drag-ghost.fit{border-color:var(--ghost-color,var(--accent));}
+.drag-ghost.blocked{border-color:var(--bad);}
+.drag-ghost .ghost-grid{display:grid; gap:3px; align-items:center; justify-content:center;}
+.drag-ghost .ghost-mini{width:16px; height:16px; border-radius:4px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.08);}
+.drag-ghost .ghost-mini.filled{background:var(--ghost-color,var(--accent)); border-color:rgba(255,255,255,.45); box-shadow:inset 0 -3px rgba(0,0,0,.16);}
+.drag-ghost .ghost-copy{font-size:12px; line-height:1.15; color:var(--text); font-weight:900; white-space:nowrap;}
+.drag-ghost .ghost-copy small{display:block; color:var(--muted); font-size:10px; margin-top:2px; font-weight:800;}
+body.puzzle-mode .queue-debug{width:100%; text-align:center; font-size:14px; line-height:1.25;}
+@media(max-width:850px){
+  body.puzzle-mode .board-wrap{gap:6px; padding:8px; justify-content:flex-start;}
+  body.puzzle-mode .board-wrap h2{font-size:28px; line-height:1;}
+  body.puzzle-mode .play-help{display:none;}
+  body.puzzle-mode .selected-banner{font-size:12px; padding:7px 9px; flex:0 0 auto;}
+  body.puzzle-mode .actions{width:100%; display:grid; grid-template-columns:1fr auto; gap:6px;}
+  body.puzzle-mode .actions .btn{padding:9px 8px; font-size:13px; min-height:42px;}
+  body.puzzle-mode .queue-debug{order:3; font-size:12px; margin:0;}
+  body.puzzle-mode .pieces{order:4; grid-template-columns:1.15fr .9fr .9fr; gap:6px; width:100%;}
+  body.puzzle-mode .piece{min-height:58px; padding:5px 6px; gap:3px; border-radius:14px;}
+  body.puzzle-mode .piece .queue-label{font-size:8px; letter-spacing:.04em;}
+  body.puzzle-mode .piece .tap-note{display:none;}
+  body.puzzle-mode .piece strong{font-size:12px;}
+  body.puzzle-mode .piece .mini-piece{gap:2px;}
+  body.puzzle-mode .mini-cell{width:12px; height:12px; border-radius:3px;}
+  body.puzzle-mode .board{order:5; width:min(94vw, calc(100dvh - 278px)); height:min(94vw, calc(100dvh - 278px)); min-width:260px; min-height:260px; gap:3px; padding:5px;}
+  body.puzzle-mode .footer-actions{order:6; width:100%; display:grid; grid-template-columns:1fr 1fr; gap:6px;}
+  body.puzzle-mode .footer-actions .btn{padding:9px 7px; font-size:13px; min-height:40px;}
+  body.puzzle-mode .footer-actions .btn:nth-child(3){display:none;}
+}
+@media(max-height:760px) and (max-width:850px){
+  body.puzzle-mode .board-wrap h2{font-size:25px;}
+  body.puzzle-mode .selected-banner{font-size:11px; padding:6px 8px;}
+  body.puzzle-mode .actions .btn{min-height:38px; padding:7px 6px;}
+  body.puzzle-mode .piece{min-height:50px;}
+  body.puzzle-mode .piece strong{font-size:11px;}
+  body.puzzle-mode .queue-debug{font-size:11px;}
+  body.puzzle-mode .board{width:min(94vw, calc(100dvh - 238px)); height:min(94vw, calc(100dvh - 238px));}
+}
+
 </style>
 </head>
 <body>
@@ -166,7 +208,7 @@ body.puzzle-mode .stat b{font-size:18px;}
       <h1>Scrap Shelter</h1>
       <small>Build from the broken world</small>
     </div>
-    <div class="version">v0.26.06.03.2340 · Fullscreen Drag Drop Mobile</div>
+    <div class="version">v0.26.06.03.2359 · Mobile Compact Queue + Finger Ghost</div>
   </header>
 
   <nav class="nav">
@@ -202,12 +244,13 @@ body.puzzle-mode .stat b{font-size:18px;}
     <div class="grid2">
       <section class="card board-wrap">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;"><h2>Salvage Puzzle</h2><button class="btn small" onclick="showTab('base')">Exit Puzzle</button></div>
-        <div class="play-help"><strong>How to play:</strong> place the left part first. PC: hover to preview and click to place. Phone: drag your finger across the board to preview the ghost footprint, then lift your finger to place. The page will not scroll while the puzzle is open.</div>
+        <div class="play-help"><strong>How to play:</strong> place the left part first. PC: hover to preview and click to place. Phone: drag across the board to preview, watch the offset bubble above your finger, then lift to place. The page will not scroll while the puzzle is open.</div>
         <div class="selected-banner" id="selectedBanner"></div>
         <div class="actions"><button class="btn primary" id="placePieceBtn" onclick="commitPreviewPlacement()">Place Piece at Preview</button><button class="btn" onclick="clearPreviewAnchor()">Clear Preview</button></div>
-        <div class="board" id="board"></div>
         <div class="queue-debug" id="queueDebug">Queue initializing…</div>
         <div class="pieces" id="pieces"></div>
+        <div class="board" id="board"></div>
+        <div class="drag-ghost" id="dragGhost" aria-hidden="true"></div>
         <div class="footer-actions">
           <button class="btn primary" onclick="showRunSummary()">Claim Salvage & Return</button>
           <button class="btn" onclick="newRun(true)">Abandon / New Puzzle</button>
@@ -216,7 +259,7 @@ body.puzzle-mode .stat b{font-size:18px;}
       </section>
       <aside class="card">
         <h3>Current Run</h3>
-        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. On PC, hover and click. On phones, drag across the board to preview and lift your finger to place. Filled rows and columns pop a clear message, update the run payout, and appear in the end-of-run summary.</p>
+        <p><strong>Place the left part first.</strong> The two pieces beside it are previews only. On PC, hover and click. On phones, drag across the board and use the offset preview bubble, then lift your finger to place. Filled rows and columns pop a clear message, update the run payout, and appear in the end-of-run summary.</p>
         <div class="run-stats" id="runStats"></div>
         <div class="ad-slot">Future rewarded ad: double salvage after a completed run. Disabled in prototype.</div>
         <h3 style="margin-top:16px">Puzzle Notes</h3>
@@ -421,6 +464,44 @@ function paintPlacedCellsNow(cells){
     cell.appendChild(t);
   });
 }
+
+function renderDragGhost(piece, valid, clientX, clientY){
+  const ghost=document.getElementById('dragGhost');
+  if(!ghost || !piece) return;
+  const rows=piece.shape.length;
+  const cols=Math.max(...piece.shape.map(row=>row.length));
+  const label=valid ? 'Fits here' : 'Blocked';
+  const color=`var(--${piece.type})`;
+  let cells='';
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const filled=!!(piece.shape[r] && piece.shape[r][c]);
+      cells += `<span class="ghost-mini ${filled?'filled':''}"></span>`;
+    }
+  }
+  ghost.className = `drag-ghost show ${valid?'fit':'blocked'}`;
+  ghost.style.setProperty('--ghost-color', color);
+  ghost.innerHTML = `<div class="ghost-grid" style="grid-template-columns:repeat(${cols},16px)">${cells}</div><div class="ghost-copy">${label}<small>${RESOURCE_LABELS[piece.type]} · lift to place</small></div>`;
+  const offsetX = 18;
+  const offsetY = -96;
+  const maxX = Math.max(8, window.innerWidth - 160);
+  const maxY = Math.max(8, window.innerHeight - 90);
+  const x = Math.min(Math.max(8, clientX + offsetX), maxX);
+  const y = Math.min(Math.max(8, clientY + offsetY), maxY);
+  ghost.style.transform = `translate(${x}px, ${y}px)`;
+}
+function hideDragGhost(){
+  const ghost=document.getElementById('dragGhost');
+  if(!ghost) return;
+  ghost.classList.remove('show','fit','blocked');
+  ghost.style.transform='translate(-9999px,-9999px)';
+}
+function updateTouchDragGhost(event, pos){
+  const piece=getActivePiece();
+  if(!piece || !pos){ hideDragGhost(); return; }
+  renderDragGhost(piece, canPlace(piece,pos.r,pos.c), event.clientX, event.clientY);
+}
+
 function boardCellFromEvent(event){
   const cell = event.target.closest && event.target.closest('.cell');
   const board = document.getElementById('board');
@@ -450,6 +531,7 @@ function handleBoardPointerDown(event){
       try{board.setPointerCapture(event.pointerId);}catch(e){}
     }
     setHoverAnchor(pos.r,pos.c);
+    updateTouchDragGhost(event, pos);
     return;
   }
 
@@ -461,7 +543,7 @@ function handleBoardPointerMove(event){
     if(!touchDragActive || event.pointerId !== activeTouchPointerId) return;
     event.preventDefault();
     const pos = boardCellFromPoint(event.clientX,event.clientY);
-    if(pos) setHoverAnchor(pos.r,pos.c);
+    if(pos){ setHoverAnchor(pos.r,pos.c); updateTouchDragGhost(event, pos); }
     return;
   }
   const pos = boardCellFromEvent(event) || boardCellFromPoint(event.clientX,event.clientY);
@@ -481,6 +563,7 @@ function handleBoardPointerUp(event){
   touchDragActive = false;
   activeTouchPointerId = null;
   mobilePreviewLocked = false;
+  hideDragGhost();
   if(hoverAnchor && canPlace(getActivePiece(), hoverAnchor.r, hoverAnchor.c)){
     commitPreviewPlacement();
   }else{
@@ -492,6 +575,7 @@ function handleBoardPointerCancel(event){
   touchDragActive = false;
   activeTouchPointerId = null;
   mobilePreviewLocked = false;
+  hideDragGhost();
 }
 function handleBoardClick(event){
   const pos = boardCellFromEvent(event);
@@ -538,6 +622,7 @@ function commitPreviewPlacement(){
 function clearPreviewAnchor(){
   hoverAnchor=null;
   mobilePreviewLocked=false;
+  hideDragGhost();
   applyGhostPreview();
   renderSelectedBanner();
 }
@@ -619,7 +704,7 @@ function renderSelectedBanner(){
   const el=document.getElementById('selectedBanner'); if(!el||!run) return;
   const piece=getActivePiece();
   if(!piece){el.innerHTML='<span>No part can fit.</span><b>Claim salvage or start a new puzzle.</b>'; return;}
-  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift finger to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag across the board to preview, then lift to place.';
+  const fitText = hoverAnchor ? (canPlace(piece,hoverAnchor.r,hoverAnchor.c) ? 'Fits here — PC click places; phone users lift to place.' : 'Does not fit here.') : 'PC: hover/click. Phone: drag for offset preview, lift to place.';
   el.innerHTML=`<span>Current part: <b>${RESOURCE_LABELS[piece.type]}</b></span><span>${fitText}</span>`;
 }
 function getActivePiece(){ return run && run.pieces && run.pieces.length ? run.pieces[0] : null; }
